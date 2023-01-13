@@ -7,15 +7,15 @@ import (
 
 	. "github.com/cube2222/octosql/execution"
 	"github.com/cube2222/octosql/octosql"
-	"github.com/cube2222/octosql/physical"
 	"go.etcd.io/etcd/server/v3/lease"
 	"go.etcd.io/etcd/server/v3/mvcc"
 	"go.etcd.io/etcd/server/v3/mvcc/backend"
 )
 
 type DatasourceExecuting struct {
-	path   string
-	fields []physical.SchemaField
+	path string
+	// those are the field indices we need to include in the result
+	fieldIndices []int
 }
 
 func (d *DatasourceExecuting) Run(ctx ExecutionContext, produce ProduceFn, metaSend MetaSendFn) error {
@@ -81,7 +81,13 @@ func (d *DatasourceExecuting) Run(ctx ExecutionContext, produce ProduceFn, metaS
 			fmt.Printf("couldn't parse key [%s] into schema with [%d] split %v\n", skey, len(keyPart), keyPart)
 		}
 
-		err := produce(ProduceFromExecutionContext(ctx), NewRecord(values, false, time.Time{}))
+		// remove the fields we don't need for a given query
+		var result []octosql.Value
+		for _, fi := range d.fieldIndices {
+			result = append(result, values[fi])
+		}
+
+		err := produce(ProduceFromExecutionContext(ctx), NewRecord(result, false, time.Time{}))
 		if err != nil {
 			fmt.Printf("got an error while producing record: %v\n", err)
 			return err

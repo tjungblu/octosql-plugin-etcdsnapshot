@@ -11,7 +11,8 @@ import (
 )
 
 type impl struct {
-	path string
+	path         string
+	schemaFields []physical.SchemaField
 }
 
 type Config struct {
@@ -64,14 +65,29 @@ func (d Database) GetTable(ctx context.Context, name string, options map[string]
 		},
 	}
 
-	return &impl{path: name}, physical.NewSchema(schemaFields, -1, physical.WithNoRetractions(true)), nil
+	return &impl{path: name, schemaFields: schemaFields}, physical.NewSchema(schemaFields, -1, physical.WithNoRetractions(true)), nil
 }
 
 func (i *impl) Materialize(ctx context.Context, env physical.Environment, schema physical.Schema, pushedDownPredicates []physical.Expression) (execution.Node, error) {
 	fmt.Printf("etcd query predicates %v\n", pushedDownPredicates)
+	fmt.Printf("etcd query env %v\n", env)
+	fmt.Printf("etcd query schema %v\n", schema)
+
+	var fieldIndices []int
+	// this is a silly n^2 loop, but we don't have that many columns for it to matter
+	for _, field := range schema.Fields {
+		for i, sf := range i.schemaFields {
+			if sf.Name == field.Name {
+				fieldIndices = append(fieldIndices, i)
+				break
+			}
+		}
+	}
+
+	fmt.Printf("etcd query resolved indices %v\n", fieldIndices)
 	return &DatasourceExecuting{
-		path:   i.path,
-		fields: schema.Fields,
+		path:         i.path,
+		fieldIndices: fieldIndices,
 	}, nil
 }
 
