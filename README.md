@@ -1,7 +1,8 @@
 # OctoSQL Plugin for ETCD (snapshots)
 
 This is a plugin to run queries against etcd snapshots. This plugin is compatible with the key layout of Kubernetes.
-Values are currently not support.
+
+*Values are not support (yet).*
 
 The very basic example is listing all keys:
 
@@ -11,6 +12,31 @@ $ octosql "SELECT * FROM etcd.snapshot"
 
 where "etcd.snapshot" is an etcd snapshot in the current folder that was generated with `etcdctl snapshot save`.
 
+The table schema currently looks like that:
+
+```sql
+$ octosql "SELECT * FROM etcd.snapshot" --describe
++-------------------+-----------------+------------+
+|       name        |      type       | time_field |
++-------------------+-----------------+------------+
+| 'apigroup'        | 'NULL | String' | false      |
+| 'apiserverPrefix' | 'NULL | String' | false      |
+| 'key'             | 'String'        | false      |
+| 'name'            | 'NULL | String' | false      |
+| 'namespace'       | 'NULL | String' | false      |
+| 'resourceType'    | 'NULL | String' | false      |
++-------------------+-----------------+------------+
+```
+
+* `key` is the actual key in etcd, all others can be NULL.
+* `apiserverPrefix` is the prefix defined in the apiserver, for example openshift.io, kubernetes.io or registry
+* `apigroup` are specified groups, eg. cloudcredential.openshift.io
+* `resourceType` are the usual k8s resources like "pod", "service", "deployment"
+* `namespace` is the namespace of that resource
+* `name` is the resource name
+
+
+## Examples
 
 Awesome queries you can run against your etcd snapshots now:
 
@@ -63,7 +89,7 @@ $ octosql "SELECT namespace, COUNT(*) AS CNT FROM etcd.snapshot where resourceTy
 | 'openshift-apiserver'                              | 234 |
 | 'openshift-authentication-operator'                | 227 |
 | 'openshift-kube-apiserver'                         | 222 |
-...    
+   ....    
 ```
 
 How many image streams are there?
@@ -81,7 +107,7 @@ $ octosql "SELECT COUNT(*) AS CNT FROM etcd.snapshot where resourceType='imagest
 
 1. Follow the instructions on [OctoSQL](https://github.com/cube2222/octosql) to install the query binary.
 2. Register the etcdsnapshot with the "snapshot" extension like that:
-> echo "{\"snapshot\": \"etcdsnapshot\"}" > ~/.octosql/file_extension_handlers.json
+> mkdir -p ~/.octosql/ && echo "{\"snapshot\": \"etcdsnapshot\"}" > ~/.octosql/file_extension_handlers.json
 3. Install the plugin with
 
 
