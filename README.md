@@ -108,7 +108,10 @@ $ octosql "SELECT COUNT(*) AS CNT FROM etcd.snapshot where resourceType='imagest
 1. Follow the instructions on [OctoSQL](https://github.com/cube2222/octosql) to install the query binary.
 2. Register the etcdsnapshot with the "snapshot" extension like that:
 > mkdir -p ~/.octosql/ && echo "{\"snapshot\": \"etcdsnapshot\"}" > ~/.octosql/file_extension_handlers.json
-3. Install the plugin with
+3. Add this repository as a plugin repo:
+> octosql plugin repository add https://raw.githubusercontent.com/tjungblu/octosql-plugin-etcdsnapshot/main/plugin_repository.json
+4. Install the plugin:
+> octosql plugin install etcdsnapshot/etcdsnapshot
 
 
 Try it out with a snapshot file named "etcd.snapshot" in the current folder: 
