@@ -49,7 +49,7 @@ $ octosql "SELECT COUNT(*) FROM etcd.snapshot"
 +-------+
 ```
 
-Get all keys that are named "console":
+### Get all keys that are named "console"
 
 ```sql
 $ octosql "SELECT * FROM etcd.snapshot WHERE name='console'"
@@ -71,7 +71,7 @@ $ octosql "SELECT * FROM etcd.snapshot WHERE name='console'"
 +----------------------------------------------------------------------------------+-----------------+-------------------------+------------------------+---------------------+-----------+
 ```
 
-Get how many events are emitted by namespace:
+### Get how many events are emitted by namespace
 
 ```sql
 $ octosql "SELECT namespace, COUNT(*) AS CNT FROM etcd.snapshot where resourceType='events' GROUP BY namespace ORDER BY CNT DESC"
@@ -92,7 +92,7 @@ $ octosql "SELECT namespace, COUNT(*) AS CNT FROM etcd.snapshot where resourceTy
    ....    
 ```
 
-How many image streams are there?
+### How many image streams are there?
 
 ```sql
 $ octosql "SELECT COUNT(*) AS CNT FROM etcd.snapshot where resourceType='imagestreams'  ORDER BY CNT DESC"
@@ -101,6 +101,27 @@ $ octosql "SELECT COUNT(*) AS CNT FROM etcd.snapshot where resourceType='imagest
 +-----+
 |  60 |
 +-----+
+```
+
+### Diff between two snapshots
+
+```sql
+$ octosql "SELECT l.key FROM etcd.snapshot l LEFT JOIN etcd_later.snapshot r ON l.key = r.key WHERE r.key IS NULL"
++---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|                                                                                                key                                                                                                |
++---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| '/kubernetes.io/certificatesigningrequests/csr-2sxqs'                                                                                                                                             |
+| '/kubernetes.io/certificatesigningrequests/csr-2zmsm'                                                                                                                                             |
+| '/kubernetes.io/certificatesigningrequests/csr-66szn'                                                                                                                                             |
+| '/kubernetes.io/certificatesigningrequests/csr-7zpfn'                                                                                                                                             |
+| '/kubernetes.io/certificatesigningrequests/csr-dwg5r'                                                                                                                                             |
+| '/kubernetes.io/certificatesigningrequests/csr-fqfcr'                                                                                                                                             |
+| '/kubernetes.io/certificatesigningrequests/csr-h6kzp'                                                                                                                                             |
+| '/kubernetes.io/certificatesigningrequests/csr-jz5vr'                                                                                                                                             |
+| '/kubernetes.io/certificatesigningrequests/csr-n7qzt'                                                                                                                                             |
+
+....
+
 ```
 
 ## Installation
