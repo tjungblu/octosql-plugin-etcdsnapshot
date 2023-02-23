@@ -81,6 +81,9 @@ func (d *DatasourceExecuting) Run(ctx ExecutionContext, produce ProduceFn, metaS
 			fmt.Printf("couldn't parse key [%s] into schema with [%d] split %v\n", skey, len(keyPart), keyPart)
 		}
 
+		// add the size in bytes for the value, for easier sizing queries
+		values = append(values, octosql.NewInt(len(kv.Value)))
+
 		// remove the fields we don't need for a given query
 		var result []octosql.Value
 		for _, fi := range d.fieldIndices {

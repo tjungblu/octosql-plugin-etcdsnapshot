@@ -63,6 +63,12 @@ func (d Database) GetTable(ctx context.Context, name string, options map[string]
 			Name: "name",
 			Type: octosql.TypeSum(octosql.Null, octosql.String),
 		},
+
+		// this should always be the last entry in this definition listing
+		{
+			Name: "valueSize",
+			Type: octosql.Int,
+		},
 	}
 
 	return &impl{path: name, schemaFields: schemaFields}, physical.NewSchema(schemaFields, -1, physical.WithNoRetractions(true)), nil

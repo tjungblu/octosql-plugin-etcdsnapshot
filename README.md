@@ -25,6 +25,7 @@ $ octosql "SELECT * FROM etcd.snapshot" --describe
 | 'name'            | 'NULL | String' | false      |
 | 'namespace'       | 'NULL | String' | false      |
 | 'resourceType'    | 'NULL | String' | false      |
+| 'valueSize'       | 'Int'           | false      |
 +-------------------+-----------------+------------+
 ```
 
@@ -34,6 +35,7 @@ $ octosql "SELECT * FROM etcd.snapshot" --describe
 * `resourceType` are the usual k8s resources like "pod", "service", "deployment"
 * `namespace` is the namespace of that resource
 * `name` is the resource name
+* `valueSize` is the amount of bytes needed to store the value
 
 
 ## Examples
@@ -119,9 +121,23 @@ $ octosql "SELECT l.key FROM etcd.snapshot l LEFT JOIN etcd_later.snapshot r ON 
 | '/kubernetes.io/certificatesigningrequests/csr-h6kzp'                                                                                                                                             |
 | '/kubernetes.io/certificatesigningrequests/csr-jz5vr'                                                                                                                                             |
 | '/kubernetes.io/certificatesigningrequests/csr-n7qzt'                                                                                                                                             |
+   ....
+```
 
-....
+### What namespaces are taking the most space?
 
+```sql
+$ octosql "SELECT namespace, SUM(valueSize) AS S from etcd.snapshot GROUP BY namespace ORDER BY S DESC"
+
+----------------------------------------------------+---------+
+|                     namespace                      |    S    |
++----------------------------------------------------+---------+
+| 'openshift-monitoring'                             | 3635823 |
+| 'customresourcedefinitions'                        | 2752055 |
+| 'apirequestcounts'                                 | 2138028 |
+| <null>                                             | 1737472 |
+| 'openshift-config-managed'                         | 1278729 |
+  ....
 ```
 
 ## Installation
@@ -137,3 +153,4 @@ $ octosql "SELECT l.key FROM etcd.snapshot l LEFT JOIN etcd_later.snapshot r ON 
 
 Try it out with a snapshot file named "etcd.snapshot" in the current folder: 
 > octosql "SELECT * FROM etcd.snapshot"
+
