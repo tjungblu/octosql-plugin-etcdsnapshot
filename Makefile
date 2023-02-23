@@ -12,7 +12,7 @@ OCTOSQLPATH  := ${HOME}/.octosql/plugins/etcdsnapshot/octosql-plugin-etcdsnapsho
 # Required for globs to work correctly
 SHELL=/bin/bash
 
-.DEFAULT_GOAL := build
+.DEFAULT_GOAL := unit-test build
 
 .PHONY: release
 release:
@@ -29,3 +29,9 @@ build:
 install: build
 	mkdir -p ${OCTOSQLPATH}
 	cp ${BINARY} ${OCTOSQLPATH}
+
+.PHONY: unit-test
+unit-test:
+	@echo
+	@echo "==> Running unit tests <=="
+	$(GO) test $(GOFLAGS) $(TESTS) $(TESTFLAGS)
