@@ -154,3 +154,13 @@ $ octosql "SELECT namespace, SUM(valueSize) AS S from etcd.snapshot GROUP BY nam
 Try it out with a snapshot file named "etcd.snapshot" in the current folder: 
 > octosql "SELECT * FROM etcd.snapshot"
 
+### Build locally
+
+In order to get a build directly from the source, you can leverage the makefile to build:
+
+> make build
+
+and install it directly in the plugin directory with:
+
+> make install
+
