@@ -6,7 +6,7 @@ TESTFLAGS    :=
 LDFLAGS      :=
 GOFLAGS      :=
 BINARY       := octosql-plugin-etcdsnapshot
-VERSION      := v0.1.1
+VERSION      := v0.1.2
 OCTOSQLPATH  := ${HOME}/.octosql/plugins/etcdsnapshot/octosql-plugin-etcdsnapshot/${VERSION}/
 
 # Required for globs to work correctly
