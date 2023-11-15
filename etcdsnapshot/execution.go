@@ -2,6 +2,8 @@ package etcdsnapshot
 
 import (
 	"fmt"
+	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -15,13 +17,81 @@ import (
 
 type DatasourceExecuting struct {
 	path string
+
 	// those are the field indices we need to include in the result
 	fieldIndices []int
+	schema       Schema
 }
 
 func (d *DatasourceExecuting) Run(ctx ExecutionContext, produce ProduceFn, metaSend MetaSendFn) error {
-	etcdBackend := backend.NewDefaultBackend(d.path)
-	fmt.Printf("etcd backend read from %s with size %d\n", d.path, etcdBackend.Size())
+
+	stat, err := os.Stat(d.path)
+	if err != nil {
+		fmt.Printf("got an error while accessing db: %v\n", err)
+		return err
+	}
+
+	if stat.IsDir() {
+		dbPath := path.Join(d.path, "member", "snap", "db")
+		_, err = os.Stat(dbPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				fmt.Printf("found a dir, but no database file in 'member/snap/db': %v\n", err)
+				return fmt.Errorf("db file not found in directory structure")
+			}
+
+			fmt.Printf("stat error with 'member/snap/db': %v\n", err)
+			return err
+		}
+
+		// TODO(thomas): can we create the server instead, replay WAL and create a snapshot?
+
+		// the DB file itself is a bbolt snapshot, so we can directly read from it the same way
+		return produceFromBBoltBackend(ctx, produce, dbPath, d.fieldIndices, d.schema)
+	}
+
+	return produceFromBBoltBackend(ctx, produce, d.path, d.fieldIndices, d.schema)
+}
+
+func produceFromBBoltBackend(ctx ExecutionContext, produce ProduceFn, snapshotPath string, fieldIndices []int, schema Schema) error {
+	etcdBackend := backend.NewDefaultBackend(snapshotPath)
+	fmt.Printf("etcd backend read from [%s] with size %d bytes, in use: %d\n", snapshotPath, etcdBackend.Size(), etcdBackend.SizeInUse())
+
+	var err error
+	switch schema {
+	case SchemaMeta:
+		err = produceMetaFromBackend(ctx, produce, etcdBackend, fieldIndices)
+	case SchemaContent:
+		err = produceContentFromMvccStore(ctx, produce, etcdBackend, fieldIndices)
+	}
+
+	return err
+}
+
+func produceMetaFromBackend(ctx ExecutionContext, produce ProduceFn, etcdBackend backend.Backend, fieldIndices []int) error {
+
+	values := []octosql.Value{
+		octosql.NewFloat(float64(etcdBackend.Size())),
+		octosql.NewFloat(float64(etcdBackend.SizeInUse())),
+		octosql.NewFloat(float64(etcdBackend.Size() - etcdBackend.SizeInUse())),
+	}
+
+	// remove the fields we don't need for a given query
+	var result []octosql.Value
+	for _, fi := range fieldIndices {
+		result = append(result, values[fi])
+	}
+
+	err := produce(ProduceFromExecutionContext(ctx), NewRecord(result, false, time.Time{}))
+	if err != nil {
+		fmt.Printf("got an error while producing record: %v\n", err)
+		return err
+	}
+
+	return nil
+}
+
+func produceContentFromMvccStore(ctx ExecutionContext, produce ProduceFn, etcdBackend backend.Backend, fieldIndices []int) error {
 	store := mvcc.NewStore(nil, etcdBackend, &lease.FakeLessor{}, mvcc.StoreConfig{CompactionBatchLimit: 0})
 	fmt.Printf("restore store with rev %d\n", store.Rev())
 	result, err := store.Range(ctx.Context, []byte{}, []byte{}, mvcc.RangeOptions{Limit: -1})
@@ -38,7 +108,7 @@ func (d *DatasourceExecuting) Run(ctx ExecutionContext, produce ProduceFn, metaS
 
 		// remove the fields we don't need for a given query
 		var result []octosql.Value
-		for _, fi := range d.fieldIndices {
+		for _, fi := range fieldIndices {
 			result = append(result, values[fi])
 		}
 
@@ -48,7 +118,6 @@ func (d *DatasourceExecuting) Run(ctx ExecutionContext, produce ProduceFn, metaS
 			return err
 		}
 	}
-
 	return nil
 }
 

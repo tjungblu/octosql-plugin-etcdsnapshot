@@ -3,15 +3,22 @@ package etcdsnapshot
 import (
 	"context"
 	"fmt"
-
 	"github.com/cube2222/octosql/execution"
 	"github.com/cube2222/octosql/octosql"
 	"github.com/cube2222/octosql/physical"
 	"github.com/cube2222/octosql/plugins"
 )
 
-type impl struct {
+type Schema int
+
+const (
+	SchemaContent Schema = iota
+	SchemaMeta    Schema = iota
+)
+
+type etcdSnapshotDataSource struct {
 	path         string
+	schema       Schema
 	schemaFields []physical.SchemaField
 }
 
@@ -30,10 +37,32 @@ func Creator(ctx context.Context, configUntyped plugins.ConfigDecoder) (physical
 }
 
 func (d Database) ListTables(ctx context.Context) ([]string, error) {
-	return []string{"etcdsnapshot"}, nil
+	return []string{}, nil
 }
 
 func (d Database) GetTable(ctx context.Context, name string, options map[string]string) (physical.DatasourceImplementation, physical.Schema, error) {
+	if _, ok := options["meta"]; ok {
+		schemaFields := []physical.SchemaField{
+			{
+				// size of the entire database file
+				Name: "size",
+				Type: octosql.Float, // float because there's no 64 bit integer type in octosql
+			},
+			{
+				// how many bytes of "size" are in use
+				Name: "sizeInUse",
+				Type: octosql.Float, // float because there's no 64 bit integer type in octosql
+			},
+			{
+				// how much space is considered free, meaning "size - sizeInUse".
+				Name: "sizeFree",
+				Type: octosql.Float, // float because there's no 64 bit integer type in octosql
+			},
+		}
+
+		return &etcdSnapshotDataSource{path: name, schemaFields: schemaFields, schema: SchemaMeta}, physical.NewSchema(schemaFields, -1, physical.WithNoRetractions(true)), nil
+	}
+
 	schemaFields := []physical.SchemaField{
 		{
 			// that's the full key
@@ -71,10 +100,11 @@ func (d Database) GetTable(ctx context.Context, name string, options map[string]
 		},
 	}
 
-	return &impl{path: name, schemaFields: schemaFields}, physical.NewSchema(schemaFields, -1, physical.WithNoRetractions(true)), nil
+	return &etcdSnapshotDataSource{path: name, schemaFields: schemaFields, schema: SchemaContent}, physical.NewSchema(schemaFields, -1, physical.WithNoRetractions(true)), nil
+
 }
 
-func (i *impl) Materialize(ctx context.Context, env physical.Environment, schema physical.Schema, pushedDownPredicates []physical.Expression) (execution.Node, error) {
+func (i *etcdSnapshotDataSource) Materialize(ctx context.Context, env physical.Environment, schema physical.Schema, pushedDownPredicates []physical.Expression) (execution.Node, error) {
 	fmt.Printf("etcd query predicates %v\n", pushedDownPredicates)
 	fmt.Printf("etcd query env %v\n", env)
 	fmt.Printf("etcd query schema %v\n", schema)
@@ -90,13 +120,14 @@ func (i *impl) Materialize(ctx context.Context, env physical.Environment, schema
 		}
 	}
 
-	fmt.Printf("etcd query resolved indices %v\n", fieldIndices)
+	fmt.Printf("etcd query resolved indices %v for schema %d\n", fieldIndices, i.schema)
 	return &DatasourceExecuting{
 		path:         i.path,
 		fieldIndices: fieldIndices,
+		schema:       i.schema,
 	}, nil
 }
 
-func (i *impl) PushDownPredicates(newPredicates, pushedDownPredicates []physical.Expression) (rejected, pushedDown []physical.Expression, changed bool) {
+func (i *etcdSnapshotDataSource) PushDownPredicates(newPredicates, pushedDownPredicates []physical.Expression) (rejected, pushedDown []physical.Expression, changed bool) {
 	return newPredicates, []physical.Expression{}, false
 }

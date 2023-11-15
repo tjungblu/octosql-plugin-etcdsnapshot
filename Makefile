@@ -6,7 +6,8 @@ TESTFLAGS    :=
 LDFLAGS      :=
 GOFLAGS      :=
 BINARY       := octosql-plugin-etcdsnapshot
-VERSION      := v0.1.2
+VERSION      := 0.1.2
+VVERSION      := "v$(VERSION)"
 OCTOSQLPATH  := ${HOME}/.octosql/plugins/etcdsnapshot/octosql-plugin-etcdsnapshot/${VERSION}/
 
 # Required for globs to work correctly
@@ -19,7 +20,7 @@ release:
 	@echo
 	@echo "==> Preparing the release $(VERSION) <=="
 	go mod tidy
-	git tag ${VERSION}
+	git tag ${VVERSION}
 
 .PHONY: build
 build:

@@ -1,8 +1,8 @@
-# OctoSQL Plugin for ETCD (snapshots)
+# OctoSQL Plugin for ETCD
 
-This is a plugin to run queries against etcd snapshots. This plugin is compatible with the key layout of Kubernetes.
+This is a plugin to run queries against etcd snapshots and raw database folders. This plugin is compatible with the key layout of Kubernetes.
 
-*Values are not support (yet).*
+*Values are not supported (yet).*
 
 The very basic example is listing all keys:
 
@@ -11,6 +11,24 @@ $ octosql "SELECT * FROM etcd.snapshot"
 ```
 
 where "etcd.snapshot" is an etcd snapshot in the current folder that was generated with `etcdctl snapshot save`.
+
+Alternatively, you can supply a direct path:
+
+```sql
+$ octosql "SELECT * FROM ./etcdsnapshot/data/basic.snapshot"
+```
+
+When you don't have the snapshot extension, you can also directly supply the plugin source via:
+
+```sql
+$ octosql "SELECT * FROM etcdsnapshot.etcddump"
+```
+
+This is also required when loading from a "dataDir" directly:
+
+```sql
+$ octosql "SELECT * FROM etcdsnapshot./var/lib/etcd/"
+```
 
 The table schema currently looks like that:
 
