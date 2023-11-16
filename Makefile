@@ -6,7 +6,7 @@ TESTFLAGS    :=
 LDFLAGS      :=
 GOFLAGS      :=
 BINARY       := octosql-plugin-etcdsnapshot
-VERSION      := 0.1.2
+VERSION      := 0.1.3
 VVERSION      := "v$(VERSION)"
 OCTOSQLPATH  := ${HOME}/.octosql/plugins/etcdsnapshot/octosql-plugin-etcdsnapshot/${VERSION}/
 
@@ -19,8 +19,8 @@ SHELL=/bin/bash
 release:
 	@echo
 	@echo "==> Preparing the release $(VERSION) <=="
-	go mod tidy
 	git tag ${VVERSION}
+	git push --tags
 
 .PHONY: build
 build:
