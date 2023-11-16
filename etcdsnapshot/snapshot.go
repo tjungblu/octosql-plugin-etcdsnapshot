@@ -37,7 +37,7 @@ func Creator(ctx context.Context, configUntyped plugins.ConfigDecoder) (physical
 }
 
 func (d Database) ListTables(ctx context.Context) ([]string, error) {
-	return []string{}, nil
+	return []string{"etcdsnapshot"}, nil
 }
 
 func (d Database) GetTable(ctx context.Context, name string, options map[string]string) (physical.DatasourceImplementation, physical.Schema, error) {
@@ -92,7 +92,10 @@ func (d Database) GetTable(ctx context.Context, name string, options map[string]
 			Name: "name",
 			Type: octosql.TypeSum(octosql.Null, octosql.String),
 		},
-
+		{
+			Name: "value",
+			Type: octosql.String,
+		},
 		// this should always be the last entry in this definition listing
 		{
 			Name: "valueSize",

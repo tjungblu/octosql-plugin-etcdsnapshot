@@ -27,6 +27,7 @@ func TestMappingOfKeys(t *testing.T) {
 				octosql.NewNull(),
 				octosql.NewNull(),
 				octosql.NewNull(),
+				octosql.NewString("some"),
 				octosql.NewInt(4),
 			},
 		},
@@ -40,6 +41,7 @@ func TestMappingOfKeys(t *testing.T) {
 				octosql.NewNull(),
 				octosql.NewNull(),
 				octosql.NewNull(),
+				octosql.NewString("some"),
 				octosql.NewInt(4),
 			},
 		},
@@ -53,6 +55,7 @@ func TestMappingOfKeys(t *testing.T) {
 				octosql.NewNull(),
 				octosql.NewNull(),
 				octosql.NewNull(),
+				octosql.NewString("some"),
 				octosql.NewInt(4),
 			},
 		},
@@ -66,6 +69,7 @@ func TestMappingOfKeys(t *testing.T) {
 				octosql.NewString("2"),
 				octosql.NewNull(),
 				octosql.NewString("3"),
+				octosql.NewString("some"),
 				octosql.NewInt(4),
 			},
 		},
@@ -79,6 +83,7 @@ func TestMappingOfKeys(t *testing.T) {
 				octosql.NewString("2"),
 				octosql.NewString("3"),
 				octosql.NewString("4"),
+				octosql.NewString("some-other"),
 				octosql.NewInt(10),
 			},
 		},
@@ -92,6 +97,7 @@ func TestMappingOfKeys(t *testing.T) {
 				octosql.NewString("3"),
 				octosql.NewString("4"),
 				octosql.NewString("5"),
+				octosql.NewString("some-other"),
 				octosql.NewInt(10),
 			},
 		},
@@ -109,7 +115,7 @@ func TestMappingOfKeys(t *testing.T) {
 func TestBasicSnapshot(t *testing.T) {
 	ds := &DatasourceExecuting{
 		path:         "data/basic.snapshot",
-		fieldIndices: []int{0, 1, 2, 3, 4, 5, 6},
+		fieldIndices: []int{0, 1, 2, 3, 4, 5, 6, 7},
 	}
 
 	expectedRecords := []execution.Record{
@@ -121,6 +127,7 @@ func TestBasicSnapshot(t *testing.T) {
 				octosql.NewNull(),
 				octosql.NewNull(),
 				octosql.NewNull(),
+				octosql.NewString("b"),
 				octosql.NewInt(1),
 			}, false, time.Time{}),
 
@@ -132,6 +139,7 @@ func TestBasicSnapshot(t *testing.T) {
 				octosql.NewNull(),
 				octosql.NewNull(),
 				octosql.NewNull(),
+				octosql.NewString("c"),
 				octosql.NewInt(1),
 			}, false, time.Time{}),
 		execution.NewRecord(
@@ -142,6 +150,7 @@ func TestBasicSnapshot(t *testing.T) {
 				octosql.NewNull(),
 				octosql.NewNull(),
 				octosql.NewNull(),
+				octosql.NewString("e"),
 				octosql.NewInt(1),
 			}, false, time.Time{}),
 	}
@@ -160,4 +169,25 @@ func TestBasicSnapshot(t *testing.T) {
 
 	require.NoError(t, err)
 	require.EqualValues(t, expectedRecords, records)
+}
+
+func _testFolder(t *testing.T) {
+	ds := &DatasourceExecuting{
+		path:         "/home/tjungblu/Downloads/ddump",
+		fieldIndices: []int{0, 1, 2, 3, 4, 5, 6, 7},
+	}
+
+	var records []execution.Record
+	err := ds.Run(execution.ExecutionContext{
+		Context:         context.TODO(),
+		VariableContext: nil,
+	},
+		func(ctx execution.ProduceContext, record execution.Record) error {
+			records = append(records, record)
+			return nil
+		},
+		nil,
+	)
+
+	require.NoError(t, err)
 }

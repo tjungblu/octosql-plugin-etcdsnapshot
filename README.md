@@ -1,8 +1,6 @@
 # OctoSQL Plugin for ETCD
 
-This is a plugin to run queries against etcd snapshots and raw database folders. This plugin is compatible with the key layout of Kubernetes.
-
-*Values are not supported (yet).*
+This is a plugin to run queries against etcd snapshots and raw database folders. This plugin is compatible with the key layout of Kubernetes and OpenShift.
 
 The very basic example is listing all keys:
 
@@ -27,8 +25,12 @@ $ octosql "SELECT * FROM etcdsnapshot.etcddump"
 This is also required when loading from a "dataDir" directly:
 
 ```sql
-$ octosql "SELECT * FROM etcdsnapshot./var/lib/etcd/"
+$ octosql "SELECT * FROM etcdsnapshot. /var/lib/etcd/"
 ```
+
+Mind the space and note that the database must be closed beforehand (i.e. etcd was properly shut down). 
+
+## Schema
 
 The table schema currently looks like that:
 
@@ -43,6 +45,7 @@ $ octosql "SELECT * FROM etcd.snapshot" --describe
 | 'name'            | 'NULL | String' | false      |
 | 'namespace'       | 'NULL | String' | false      |
 | 'resourceType'    | 'NULL | String' | false      |
+| 'value'           | 'String'        | false      |
 | 'valueSize'       | 'Int'           | false      |
 +-------------------+-----------------+------------+
 ```
@@ -53,12 +56,13 @@ $ octosql "SELECT * FROM etcd.snapshot" --describe
 * `resourceType` are the usual k8s resources like "pod", "service", "deployment"
 * `namespace` is the namespace of that resource
 * `name` is the resource name
+* `value` is the value as a string (usually JSON in K8s)
 * `valueSize` is the amount of bytes needed to store the value
 
 
 ## Examples
 
-Awesome queries you can run against your etcd snapshots now:
+Awesome queries you can run against your etcd (snapshots):
 
 ```sql
 $ octosql "SELECT COUNT(*) FROM etcd.snapshot"
@@ -115,7 +119,7 @@ $ octosql "SELECT namespace, COUNT(*) AS CNT FROM etcd.snapshot where resourceTy
 ### How many image streams are there?
 
 ```sql
-$ octosql "SELECT COUNT(*) AS CNT FROM etcd.snapshot where resourceType='imagestreams'  ORDER BY CNT DESC"
+$ octosql "SELECT COUNT(*) AS CNT FROM etcd.snapshot where resourceType='imagestreams' ORDER BY CNT DESC"
 +-----+
 | CNT |
 +-----+
@@ -157,6 +161,21 @@ $ octosql "SELECT namespace, SUM(valueSize) AS S from etcd.snapshot GROUP BY nam
 | 'openshift-config-managed'                         | 1278729 |
   ....
 ```
+
+### Show me the value for the "version" resource
+
+```sql
+$ octosql "SELECT d.key, SUBSTR(d.value, 0, 10) FROM etcd.snapshot d WHERE name='version'"
++--------------------------------------------------------------+--------------+
+|                             key                              |    col_1     |
++--------------------------------------------------------------+--------------+
+| '/kubernetes.io/config.openshift.io/clusterversions/version' | '{"apiVersi' |
+| '/kubernetes.io/leases/openshift-cluster-version/version'    | ''           |
++--------------------------------------------------------------+--------------+
+```
+
+Note that "key" seems to be a reserved keyword, so when querying the key you will need to qualify with its table name.
+
 
 ## Installation
 

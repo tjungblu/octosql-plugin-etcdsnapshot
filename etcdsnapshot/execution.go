@@ -6,6 +6,7 @@ import (
 	"path"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	. "github.com/cube2222/octosql/execution"
 	"github.com/cube2222/octosql/octosql"
@@ -178,7 +179,12 @@ func mapEtcdToOctosql(kv mvccpb.KeyValue) []octosql.Value {
 		}
 	}
 
-	// add the size in bytes for the value, for easier sizing queries
-	values = append(values, octosql.NewInt(len(kv.Value)))
+	value := ""
+	if utf8.Valid(kv.Value) {
+		value = string(kv.Value)
+	}
+
+	// add the value and its size in bytes for the value, for easier sizing queries
+	values = append(values, octosql.NewString(value), octosql.NewInt(len(kv.Value)))
 	return values
 }
