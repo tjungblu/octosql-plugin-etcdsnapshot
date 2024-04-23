@@ -1,7 +1,10 @@
 package etcdsnapshot
 
 import (
+	"encoding/binary"
 	"fmt"
+	"go.etcd.io/etcd/server/v3/mvcc/buckets"
+	"math"
 	"os"
 	"path"
 	"strings"
@@ -11,8 +14,6 @@ import (
 	. "github.com/cube2222/octosql/execution"
 	"github.com/cube2222/octosql/octosql"
 	"go.etcd.io/etcd/api/v3/mvccpb"
-	"go.etcd.io/etcd/server/v3/lease"
-	"go.etcd.io/etcd/server/v3/mvcc"
 	"go.etcd.io/etcd/server/v3/mvcc/backend"
 )
 
@@ -93,27 +94,28 @@ func produceMetaFromBackend(ctx ExecutionContext, produce ProduceFn, etcdBackend
 }
 
 func produceContentFromMvccStore(ctx ExecutionContext, produce ProduceFn, etcdBackend backend.Backend, fieldIndices []int) error {
-	store := mvcc.NewStore(nil, etcdBackend, &lease.FakeLessor{}, mvcc.StoreConfig{CompactionBatchLimit: 0})
-	fmt.Printf("restore store with rev %d\n", store.Rev())
-	result, err := store.Range(ctx.Context, []byte{}, []byte{}, mvcc.RangeOptions{Limit: -1})
-	if err != nil {
-		fmt.Printf("got an error while requesting whole range: %v\n", err)
-		return err
-	}
+	keys, vals := etcdBackend.ReadTx().UnsafeRange(buckets.Key, revToBytes(0, 0), revToBytes(math.MaxInt64, math.MaxInt64), math.MaxInt64)
+	fmt.Printf("found %d records in snapshot\n", len(keys))
 
-	fmt.Printf("found %d records in snapshot\n", result.Count)
+	kv := mvccpb.KeyValue{}
+	for i := 0; i < len(keys); i++ {
+		err := kv.Unmarshal(vals[i])
+		if err != nil {
+			fmt.Printf("got an error while unmarshaling value: %v\n", err)
+			return err
+		}
 
-	// TODO(thomas): do something with the json in the value "kv.Value"
-	for _, kv := range result.KVs {
 		values := mapEtcdToOctosql(kv)
 
 		// remove the fields we don't need for a given query
 		var result []octosql.Value
 		for _, fi := range fieldIndices {
-			result = append(result, values[fi])
+			if fi < len(values) {
+				result = append(result, values[fi])
+			}
 		}
 
-		err := produce(ProduceFromExecutionContext(ctx), NewRecord(result, false, time.Time{}))
+		err = produce(ProduceFromExecutionContext(ctx), NewRecord(result, false, time.Time{}))
 		if err != nil {
 			fmt.Printf("got an error while producing record: %v\n", err)
 			return err
@@ -179,6 +181,11 @@ func mapEtcdToOctosql(kv mvccpb.KeyValue) []octosql.Value {
 		}
 	}
 
+	values = append(values, octosql.NewFloat(float64(kv.CreateRevision)))
+	values = append(values, octosql.NewFloat(float64(kv.ModRevision)))
+	values = append(values, octosql.NewFloat(float64(kv.Version)))
+	values = append(values, octosql.NewFloat(float64(kv.Lease)))
+
 	value := ""
 	if utf8.Valid(kv.Value) {
 		value = string(kv.Value)
@@ -187,4 +194,16 @@ func mapEtcdToOctosql(kv mvccpb.KeyValue) []octosql.Value {
 	// add the value and its size in bytes for the value, for easier sizing queries
 	values = append(values, octosql.NewString(value), octosql.NewInt(len(kv.Value)))
 	return values
+}
+
+func revToBytes(main, sub int64) []byte {
+	bytes := make([]byte, 17)
+	binary.BigEndian.PutUint64(bytes, uint64(main))
+	bytes[8] = '_'
+	binary.BigEndian.PutUint64(bytes[9:], uint64(sub))
+	return bytes
+}
+
+func bytesToRev(bytes []byte) (main, sub int64) {
+	return int64(binary.BigEndian.Uint64(bytes[0:8])), int64(binary.BigEndian.Uint64(bytes[9:]))
 }

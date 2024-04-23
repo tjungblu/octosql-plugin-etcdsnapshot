@@ -93,10 +93,26 @@ func (d Database) GetTable(ctx context.Context, name string, options map[string]
 			Type: octosql.TypeSum(octosql.Null, octosql.String),
 		},
 		{
+			Name: "createRevision",
+			Type: octosql.Float,
+		},
+		{
+			Name: "modRevision",
+			Type: octosql.Float,
+		},
+		{
+			Name: "version",
+			Type: octosql.Float,
+		},
+		{
+			Name: "lease",
+			Type: octosql.Float,
+		},
+		// this should always be the last entry in this definition listing
+		{
 			Name: "value",
 			Type: octosql.String,
 		},
-		// this should always be the last entry in this definition listing
 		{
 			Name: "valueSize",
 			Type: octosql.Int,

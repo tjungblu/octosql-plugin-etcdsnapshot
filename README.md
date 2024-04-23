@@ -41,13 +41,17 @@ $ octosql "SELECT * FROM etcd.snapshot" --describe
 +-------------------+-----------------+------------+
 | 'apigroup'        | 'NULL | String' | false      |
 | 'apiserverPrefix' | 'NULL | String' | false      |
+| 'createRevision'  | 'Float'         | false      |
 | 'key'             | 'String'        | false      |
+| 'lease'           | 'Float'         | false      |
+| 'modRevision'     | 'Float'         | false      |
 | 'name'            | 'NULL | String' | false      |
 | 'namespace'       | 'NULL | String' | false      |
 | 'resourceType'    | 'NULL | String' | false      |
 | 'value'           | 'String'        | false      |
 | 'valueSize'       | 'Int'           | false      |
-+-------------------+-----------------+------------+
+| 'version'         | 'Int'         | false      |
++-------------------+-----------------+------------+  
 ```
 
 * `key` is the actual key in etcd, all others can be NULL.
@@ -56,8 +60,12 @@ $ octosql "SELECT * FROM etcd.snapshot" --describe
 * `resourceType` are the usual k8s resources like "pod", "service", "deployment"
 * `namespace` is the namespace of that resource
 * `name` is the resource name
-* `value` is the value as a string (usually JSON in K8s)
+* `value` is the value as a string (usually JSON in K8s/CRDs)
 * `valueSize` is the amount of bytes needed to store the value
+* `createRevision` is the revision of last creation on this key (note it is of type float to fit an 64 bit integer)
+* `modRevision` is the revision of last modification on this key (note it is of type float to fit an 64 bit integer)
+* `version` is the version of the key, a deletion resets it to zero and a modification increments its value
+* `lease` contains the lease id, if a lease is attached to that key, a value of zero means no lease
 
 
 ## Examples
@@ -176,6 +184,61 @@ $ octosql "SELECT d.key, SUBSTR(d.value, 0, 10) FROM etcd.snapshot d WHERE name=
 
 Note that "key" seems to be a reserved keyword, so when querying the key you will need to qualify with its table name.
 
+### Get the latest create revision
+
+```sql
+$ octosql "SELECT MAX(INT(createRevision)) FROM etcd.snapshot"
++-----------+
+|    max    |
++-----------+
+| 612442603 |
++-----------+
+```
+
+[Note that the revision/version related columns are stored as float64 to avoid losing data.](https://github.com/cube2222/octosql/issues/330) 
+You might need to cast the respective values with INT() or re-format the scientific output.
+
+### Count revisions for a key
+
+```sql
+ $octosql "SELECT COUNT(modRevision) FROM etcd.snapshot WHERE key='/kubernetes.io/operators.coreos.com/installplans/openshift-whatever/install-xyz'"
++----------------------+
+| count_modRevision    |
++----------------------+
+|                 3486 |
++----------------------+
+```
+
+### Which key has the most mod revisions
+
+```sql
+$ octosql "SELECT d.key, COUNT(modRevision) AS CNT FROM etcd.snapshot d GROUP BY d.key ORDER BY CNT DESC LIMIT 5"
++-------------------------------------------------------------------------------------------+------+
+|                                            key                                            | CNT  |
++-------------------------------------------------------------------------------------------+------+
+| '/kubernetes.io/operators.coreos.com/operators/xxx-operator.openshift-storage'            | 3611 |
+| '/kubernetes.io/operators.coreos.com/installplans/openshift-storage/install-abcsd'        | 3486 |
+| '/kubernetes.io/operators.coreos.com/operators/xxx-operator.openshift-storage'            | 1341 |
+| '/kubernetes.io/imageregistry.operator.openshift.io/configs/cluster'                      |  320 |
+| '/kubernetes.io/leases/cert-manager/trust-manager-leader-election'                        |  240 |
++-------------------------------------------------------------------------------------------+------+
+```
+
+### Which key has the largest size
+
+```sql
+$ octosql "SELECT d.key, SUM(valueSize) AS SZ FROM etcd.snapshot d GROUP BY d.key ORDER BY SZ DESC LIMIT 5"
++--------------------------------------------------------------------------------------------------+------------+
+|                                               key                                                |     SZ     |
++--------------------------------------------------------------------------------------------------+------------+
+| '/kubernetes.io/operators.coreos.com/installplans/openshift-storage/install-abcsd'               | 1650272400 |
+| '/kubernetes.io/operators.coreos.com/operators/xxx-operator.openshift-storage'                   |   30435788 |
+| '/kubernetes.io/operators.coreos.com/operators/xyz-operator.openshift-storage'                   |   28948038 |
+| '/kubernetes.io/apiextensions.k8s.io/customresourcedefinitions/storageclusters.xxx.openshift.io' |    3637390 |
+| '/kubernetes.io/apiserver.openshift.io/apirequestcounts/configmaps.v1'                           |    1405726 |
++--------------------------------------------------------------------------------------------------+------------+
+
+```
 
 ## Installation
 
