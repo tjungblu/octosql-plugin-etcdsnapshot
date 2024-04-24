@@ -6,7 +6,7 @@ TESTFLAGS    :=
 LDFLAGS      :=
 GOFLAGS      :=
 BINARY       := octosql-plugin-etcdsnapshot
-VERSION      := 0.1.3
+VERSION      := 0.1.4
 VVERSION      := "v$(VERSION)"
 OCTOSQLPATH  := ${HOME}/.octosql/plugins/etcdsnapshot/octosql-plugin-etcdsnapshot/${VERSION}/
 

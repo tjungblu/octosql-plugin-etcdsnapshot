@@ -41,16 +41,16 @@ $ octosql "SELECT * FROM etcd.snapshot" --describe
 +-------------------+-----------------+------------+
 | 'apigroup'        | 'NULL | String' | false      |
 | 'apiserverPrefix' | 'NULL | String' | false      |
-| 'createRevision'  | 'Float'         | false      |
+| 'createRevision'  | 'Int'           | false      |
 | 'key'             | 'String'        | false      |
-| 'lease'           | 'Float'         | false      |
-| 'modRevision'     | 'Float'         | false      |
+| 'lease'           | 'Int'           | false      |
+| 'modRevision'     | 'Int'           | false      |
 | 'name'            | 'NULL | String' | false      |
 | 'namespace'       | 'NULL | String' | false      |
 | 'resourceType'    | 'NULL | String' | false      |
 | 'value'           | 'String'        | false      |
 | 'valueSize'       | 'Int'           | false      |
-| 'version'         | 'Int'         | false      |
+| 'version'         | 'Int'           | false      |
 +-------------------+-----------------+------------+  
 ```
 
@@ -62,8 +62,8 @@ $ octosql "SELECT * FROM etcd.snapshot" --describe
 * `name` is the resource name
 * `value` is the value as a string (usually JSON in K8s/CRDs)
 * `valueSize` is the amount of bytes needed to store the value
-* `createRevision` is the revision of last creation on this key (note it is of type float to fit an 64 bit integer)
-* `modRevision` is the revision of last modification on this key (note it is of type float to fit an 64 bit integer)
+* `createRevision` is the revision of last creation on this key
+* `modRevision` is the revision of last modification on this key
 * `version` is the version of the key, a deletion resets it to zero and a modification increments its value
 * `lease` contains the lease id, if a lease is attached to that key, a value of zero means no lease
 
@@ -187,16 +187,13 @@ Note that "key" seems to be a reserved keyword, so when querying the key you wil
 ### Get the latest create revision
 
 ```sql
-$ octosql "SELECT MAX(INT(createRevision)) FROM etcd.snapshot"
+$ octosql "SELECT MAX(createRevision) FROM etcd.snapshot"
 +-----------+
 |    max    |
 +-----------+
 | 612442603 |
 +-----------+
 ```
-
-[Note that the revision/version related columns are stored as float64 to avoid losing data.](https://github.com/cube2222/octosql/issues/330) 
-You might need to cast the respective values with INT() or re-format the scientific output.
 
 ### Count revisions for a key
 

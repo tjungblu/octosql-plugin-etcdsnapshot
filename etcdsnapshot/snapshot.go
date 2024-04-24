@@ -46,17 +46,17 @@ func (d Database) GetTable(ctx context.Context, name string, options map[string]
 			{
 				// size of the entire database file
 				Name: "size",
-				Type: octosql.Float, // float because there's no 64 bit integer type in octosql
+				Type: octosql.Int,
 			},
 			{
 				// how many bytes of "size" are in use
 				Name: "sizeInUse",
-				Type: octosql.Float, // float because there's no 64 bit integer type in octosql
+				Type: octosql.Int,
 			},
 			{
 				// how much space is considered free, meaning "size - sizeInUse".
 				Name: "sizeFree",
-				Type: octosql.Float, // float because there's no 64 bit integer type in octosql
+				Type: octosql.Int,
 			},
 		}
 
@@ -94,19 +94,19 @@ func (d Database) GetTable(ctx context.Context, name string, options map[string]
 		},
 		{
 			Name: "createRevision",
-			Type: octosql.Float,
+			Type: octosql.Int,
 		},
 		{
 			Name: "modRevision",
-			Type: octosql.Float,
+			Type: octosql.Int,
 		},
 		{
 			Name: "version",
-			Type: octosql.Float,
+			Type: octosql.Int,
 		},
 		{
 			Name: "lease",
-			Type: octosql.Float,
+			Type: octosql.Int,
 		},
 		// this should always be the last entry in this definition listing
 		{
