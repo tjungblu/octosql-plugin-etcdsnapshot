@@ -237,6 +237,31 @@ $ octosql "SELECT d.key, SUM(valueSize) AS SZ FROM etcd.snapshot d GROUP BY d.ke
 
 ```
 
+## 🤖 MCP Server for AI Assistants
+
+This repository now includes an **MCP (Model Context Protocol) server** that allows AI assistants to analyze etcd snapshots using natural language! 
+
+### What is MCP?
+MCP enables AI assistants to interact with external tools and data sources. Our MCP server transforms this octosql plugin into a powerful cluster analysis tool that AI assistants can use directly.
+
+### Key Features
+- **Natural Language Queries**: Ask questions like "Show me all pods in production namespace"
+- **Intelligent Analysis**: Get cluster overviews, security scans, and performance insights
+- **Snapshot Comparison**: Compare different cluster states over time
+- **Security Assessment**: Identify potential security issues and misconfigurations
+
+### Quick Start with MCP
+```bash
+# Build the MCP server
+make build-mcp
+
+# Run the server
+export ETCD_SNAPSHOT_DIR=/path/to/snapshots
+./etcdsnapshot-mcp-server
+```
+
+See the [MCP Server Documentation](docs/mcp-server.md) for detailed usage examples and integration instructions.
+
 ## Installation
 
 1. Follow the instructions on [OctoSQL](https://github.com/cube2222/octosql) to install the query binary.

@@ -1,0 +1,11 @@
+{
+    "mcpServers": {
+      "etcd-snapshot-analyzer": {
+        "command": "./etcdsnapshot-mcp-server",
+        "args": [],
+        "env": {
+          "ETCD_SNAPSHOT_DIR": "./snapshots"
+        }
+      }
+    }
+}
