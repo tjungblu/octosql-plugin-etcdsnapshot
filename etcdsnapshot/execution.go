@@ -3,13 +3,14 @@ package etcdsnapshot
 import (
 	"encoding/binary"
 	"fmt"
-	"go.etcd.io/etcd/server/v3/mvcc/buckets"
 	"math"
 	"os"
 	"path"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"go.etcd.io/etcd/server/v3/mvcc/buckets"
 
 	. "github.com/cube2222/octosql/execution"
 	"github.com/cube2222/octosql/octosql"
@@ -57,6 +58,7 @@ func (d *DatasourceExecuting) Run(ctx ExecutionContext, produce ProduceFn, metaS
 
 func produceFromBBoltBackend(ctx ExecutionContext, produce ProduceFn, snapshotPath string, fieldIndices []int, schema Schema) error {
 	etcdBackend := backend.NewDefaultBackend(snapshotPath)
+	defer etcdBackend.Close()
 	fmt.Printf("etcd backend read from [%s] with size %d bytes, in use: %d\n", snapshotPath, etcdBackend.Size(), etcdBackend.SizeInUse())
 
 	var err error
