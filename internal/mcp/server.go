@@ -119,9 +119,9 @@ func (s *Server) registerTools() {
 			mcp.Description("Second snapshot file (comparison/newer snapshot)"),
 		),
 		mcp.WithString("diff_type",
-			mcp.Description("Type of changes to show: 'added' (new keys), 'removed' (deleted keys), 'modified' (changed keys), 'all' (all changes)"),
-			mcp.Enum("added", "removed", "modified", "all"),
-			mcp.DefaultString("all"),
+			mcp.Description("Type of changes to show: 'added' (new keys), 'removed' (deleted keys), 'added_revisions' (new revision tuples), 'removed_revisions' (deleted revision tuples)"),
+			mcp.Enum("added", "removed", "added_revisions", "removed_revisions"),
+			mcp.DefaultString("added"),
 		),
 	)
 
@@ -214,7 +214,7 @@ func (s *Server) handleCompareSnapshots(ctx context.Context, request mcp.CallToo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	diffType := request.GetString("diff_type", "all")
+	diffType := request.GetString("diff_type", "added")
 
 	result, err := s.queryEngine.CompareSnapshots(ctx, snapshot1, snapshot2, diffType)
 	if err != nil {

@@ -67,7 +67,7 @@ Compare two etcd snapshots to find differences.
 **Parameters:**
 - `snapshot1` (required): First snapshot file
 - `snapshot2` (required): Second snapshot file
-- `diff_type` (optional): Type of diff (`added`, `removed`, `modified`, `all`)
+- `diff_type` (optional): Type of diff (`added`, `removed`)
 
 **Example:**
 ```json
@@ -120,13 +120,13 @@ The MCP server can be integrated with various AI assistants and tools:
 
 #### Integration with Cursor
 
-You can load this project into cursor and build the mcp server as documented above:
+You can load this project into cursor and install the mcp server:
 
 ```bash
-make build-mcp
+make install
 ```
 
-The local configuration in the .cursor folder uses the local build and snapshots folder.
+The local configuration in the .cursor folder uses the local build and snapshots folder from your home directory.
 The MCP server should be automatically recognized and you can see the enabled tools in the chat window.
 
 You can then just simply plant a snapshot (mind the '.snapshot' extension) in the snapshot folder of your home directory:

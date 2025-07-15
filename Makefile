@@ -10,6 +10,7 @@ MCP_BINARY   := etcdsnapshot-mcp-server
 VERSION      := 0.1.5
 VVERSION      := "v$(VERSION)"
 OCTOSQLPATH  := ${HOME}/.octosql/plugins/etcdsnapshot/octosql-plugin-etcdsnapshot/${VERSION}/
+BIN_PATH     := /usr/local/bin/
 
 # Required for globs to work correctly
 SHELL=/bin/bash
@@ -35,12 +36,13 @@ build-mcp:
 build-all: build build-mcp
 
 .PHONY: install
-install: build
+install: build-all
 	mkdir -p ${OCTOSQLPATH}
 	cp ${BINARY} ${OCTOSQLPATH}
+	cp ${MCP_BINARY} ${OCTOSQLPATH}
 
-.PHONY: unit-test
-unit-test:
+.PHONY: test
+test:
 	@echo
-	@echo "==> Running unit tests <=="
+	@echo "==> Running tests <=="
 	$(GO) test $(GOFLAGS) $(TESTS) $(TESTFLAGS)

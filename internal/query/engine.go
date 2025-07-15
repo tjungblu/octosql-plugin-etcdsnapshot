@@ -54,7 +54,6 @@ func (e *Engine) ExecuteQuery(ctx context.Context, query string, snapshot string
 
 	// Execute octosql query
 	cmd := exec.CommandContext(ctx, "octosql", updatedQuery, "--output", "json")
-
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -188,68 +187,65 @@ func (e *Engine) GetResourceAnalysis(ctx context.Context, snapshot string) (*Ana
 
 // GetPerformanceAnalysis performs performance analysis
 func (e *Engine) GetPerformanceAnalysis(ctx context.Context, snapshot string) (*AnalysisResult, error) {
-	queries := []string{
-		"SELECT MAX(createRevision) as max_revision FROM {{SNAPSHOT}} t",
-		// Find keys with multiple revisions and their total impact
-		"SELECT t.key, COUNT(*) as revision_count, SUM(valueSize) as total_size, AVG(valueSize) as avg_size FROM {{SNAPSHOT}} t GROUP BY t.key HAVING COUNT(*) > 1 ORDER BY total_size DESC LIMIT 10",
-		// Find the most frequently modified keys
-		"SELECT t.key, COUNT(*) as revision_count, MIN(createRevision) as first_revision, MAX(modRevision) as last_revision FROM {{SNAPSHOT}} t GROUP BY t.key ORDER BY revision_count DESC LIMIT 10",
-		// Find the largest single values (potential bloat)
-		"SELECT t.key, valueSize, modRevision FROM {{SNAPSHOT}} t ORDER BY valueSize DESC LIMIT 10",
-		// Find keys with high churn (many revisions) AND large total footprint
-		"SELECT t.key, COUNT(*) as revision_count, SUM(valueSize) as total_size FROM {{SNAPSHOT}} t GROUP BY t.key HAVING COUNT(*) > 1 ORDER BY total_size DESC LIMIT 5",
-	}
-
 	details := make(map[string]interface{})
 	insights := []string{}
 
-	for i, query := range queries {
-		result, err := e.ExecuteQuery(ctx, query, snapshot)
-		if err != nil {
-			return nil, fmt.Errorf("failed to execute performance query %d: %w", i, err)
-		}
+	// Get maximum revision
+	maxRevisionResult, err := e.ExecuteQuery(ctx, "SELECT MAX(createRevision) as max_revision FROM {{SNAPSHOT}} t", snapshot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute max revision query: %w", err)
+	}
+	details["max_revision"] = maxRevisionResult.Data
 
-		switch i {
-		case 0:
-			details["max_revision"] = result.Data
-		case 1:
-			details["multi_revision_keys"] = result.Data
-			if len(result.Data) > 0 {
-				for _, row := range result.Data {
-					if revCount, ok := row["revision_count"].(float64); ok && revCount > 5 {
-						if totalSize, ok := row["total_size"].(float64); ok && totalSize > 100000 {
-							if key, ok := row["key"].(string); ok {
-								insights = append(insights, fmt.Sprintf("High-churn key detected: '%s' has %.0f revisions totaling %.2f KB", key, revCount, totalSize/1024))
-							}
-						}
-					}
+	// Find keys with multiple revisions and their total impact
+	multiRevisionKeysResult, err := e.ExecuteQuery(ctx,
+		"SELECT t.key, COUNT(*) as revision_count, SUM(valueSize) as total_size, AVG(valueSize) as avg_size FROM {{SNAPSHOT}} t GROUP BY t.key ORDER BY total_size DESC LIMIT 10",
+		snapshot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute multi-revision keys query: %w", err)
+	}
+	details["multi_revision_keys"] = multiRevisionKeysResult.Data
+
+	// Generate insights for high-churn keys
+	for _, row := range multiRevisionKeysResult.Data {
+		if revCount, ok := row["revision_count"].(float64); ok && revCount > 5 {
+			if totalSize, ok := row["total_size"].(float64); ok && totalSize > 100000 {
+				if key, ok := row["key"].(string); ok {
+					insights = append(insights, fmt.Sprintf("High-churn key detected: '%s' has %.0f revisions totaling %.2f KB", key, revCount, totalSize/1024))
 				}
 			}
-		case 2:
-			details["most_modified_keys"] = result.Data
-			if len(result.Data) > 0 {
-				if count, ok := result.Data[0]["revision_count"].(float64); ok && count > 10 {
-					insights = append(insights, fmt.Sprintf("Excessive key modifications detected: %.0f revisions for top key", count))
-				}
-			}
-		case 3:
-			details["largest_values"] = result.Data
-			if len(result.Data) > 0 {
-				if size, ok := result.Data[0]["valueSize"].(float64); ok && size > 1000000 {
-					insights = append(insights, fmt.Sprintf("Large value detected: %.2f MB", size/1000000))
-				}
-			}
-		case 4:
-			details["performance_hotspots"] = result.Data
-			if len(result.Data) > 0 {
-				for _, row := range result.Data {
-					if impact, ok := row["performance_impact"].(float64); ok && impact > 1000000 {
-						if key, ok := row["key"].(string); ok {
-							insights = append(insights, fmt.Sprintf("Performance hotspot: '%s' (impact score: %.0f)", key, impact))
-						}
-					}
-				}
-			}
+		}
+	}
+
+	// Find the most frequently modified keys
+	mostModifiedKeysResult, err := e.ExecuteQuery(ctx,
+		"SELECT t.key, COUNT(*) as revision_count, MIN(createRevision) as first_revision, MAX(modRevision) as last_revision FROM {{SNAPSHOT}} t GROUP BY t.key ORDER BY revision_count DESC LIMIT 10",
+		snapshot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute most modified keys query: %w", err)
+	}
+	details["most_modified_keys"] = mostModifiedKeysResult.Data
+
+	// Generate insights for excessive modifications
+	if len(mostModifiedKeysResult.Data) > 0 {
+		if count, ok := mostModifiedKeysResult.Data[0]["revision_count"].(float64); ok && count > 10 {
+			insights = append(insights, fmt.Sprintf("Excessive key modifications detected: %.0f revisions for top key", count))
+		}
+	}
+
+	// Find the largest single values (potential bloat)
+	largestValuesResult, err := e.ExecuteQuery(ctx,
+		"SELECT t.key, valueSize, modRevision FROM {{SNAPSHOT}} t ORDER BY valueSize DESC LIMIT 10",
+		snapshot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute largest values query: %w", err)
+	}
+	details["largest_values"] = largestValuesResult.Data
+
+	// Generate insights for large values
+	if len(largestValuesResult.Data) > 0 {
+		if size, ok := largestValuesResult.Data[0]["valueSize"].(float64); ok && size > 1000000 {
+			insights = append(insights, fmt.Sprintf("Large value detected: %.2f MB", size/1000000))
 		}
 	}
 
@@ -297,8 +293,7 @@ func (e *Engine) CompareSnapshots(ctx context.Context, snapshot1, snapshot2, dif
 
 	switch diffType {
 	case "added":
-		query := fmt.Sprintf("SELECT r.key, 'added' as change_type FROM %s r LEFT JOIN %s l ON r.key = l.key WHERE l.key IS NULL", snapshot2Path, snapshot1Path)
-		result, err := e.ExecuteQuery(ctx, query, "")
+		result, err := e.diffKeys(ctx, snapshot2Path, snapshot1Path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to find added keys: %w", err)
 		}
@@ -310,8 +305,7 @@ func (e *Engine) CompareSnapshots(ctx context.Context, snapshot1, snapshot2, dif
 		}, nil
 
 	case "removed":
-		query := fmt.Sprintf("SELECT l.key, 'removed' as change_type FROM %s l LEFT JOIN %s r ON l.key = r.key WHERE r.key IS NULL", snapshot1Path, snapshot2Path)
-		result, err := e.ExecuteQuery(ctx, query, "")
+		result, err := e.diffKeys(ctx, snapshot1Path, snapshot2Path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to find removed keys: %w", err)
 		}
@@ -322,101 +316,70 @@ func (e *Engine) CompareSnapshots(ctx context.Context, snapshot1, snapshot2, dif
 			Insights: []string{fmt.Sprintf("Found %d keys removed between snapshots", result.Count)},
 		}, nil
 
-	case "modified":
-		query := fmt.Sprintf("SELECT l.key, 'modified' as change_type, l.modRevision as old_revision, r.modRevision as new_revision FROM %s l JOIN %s r ON l.key = r.key WHERE l.modRevision != r.modRevision", snapshot1Path, snapshot2Path)
-		result, err := e.ExecuteQuery(ctx, query, "")
+	case "added_revisions":
+		result, err := e.diff(ctx, snapshot2Path, snapshot1Path)
 		if err != nil {
-			return nil, fmt.Errorf("failed to find modified keys: %w", err)
+			return nil, fmt.Errorf("failed to find added revisions: %w", err)
 		}
 		return &AnalysisResult{
 			Type:     "comparison",
-			Summary:  fmt.Sprintf("Found %d keys modified between snapshots", result.Count),
-			Details:  map[string]interface{}{"modified": result.Data},
-			Insights: []string{fmt.Sprintf("Found %d keys modified between snapshots", result.Count)},
+			Summary:  fmt.Sprintf("Found %d revision tuples added in %s", result.Count, snapshot2),
+			Details:  map[string]interface{}{"added_revisions": result.Data},
+			Insights: []string{fmt.Sprintf("Found %d revision tuples added between snapshots (includes updates to existing keys)", result.Count)},
 		}, nil
 
-	default: // "all"
-		// Get counts for each type of change
-		addedQuery := fmt.Sprintf("SELECT COUNT(*) as count FROM %s r LEFT JOIN %s l ON r.key = l.key WHERE l.key IS NULL", snapshot2Path, snapshot1Path)
-		removedQuery := fmt.Sprintf("SELECT COUNT(*) as count FROM %s l LEFT JOIN %s r ON l.key = r.key WHERE r.key IS NULL", snapshot1Path, snapshot2Path)
-		modifiedQuery := fmt.Sprintf("SELECT COUNT(*) as count FROM %s l JOIN %s r ON l.key = r.key WHERE l.modRevision != r.modRevision", snapshot1Path, snapshot2Path)
-
-		addedResult, err := e.ExecuteQuery(ctx, addedQuery, "")
+	case "removed_revisions":
+		result, err := e.diff(ctx, snapshot1Path, snapshot2Path)
 		if err != nil {
-			return nil, fmt.Errorf("failed to count added keys: %w", err)
+			return nil, fmt.Errorf("failed to find removed revisions: %w", err)
 		}
-
-		removedResult, err := e.ExecuteQuery(ctx, removedQuery, "")
-		if err != nil {
-			return nil, fmt.Errorf("failed to count removed keys: %w", err)
-		}
-
-		modifiedResult, err := e.ExecuteQuery(ctx, modifiedQuery, "")
-		if err != nil {
-			return nil, fmt.Errorf("failed to count modified keys: %w", err)
-		}
-
-		// Extract counts
-		addedCount := int64(0)
-		removedCount := int64(0)
-		modifiedCount := int64(0)
-
-		if len(addedResult.Data) > 0 {
-			if count, ok := addedResult.Data[0]["count"].(float64); ok {
-				addedCount = int64(count)
-			}
-		}
-
-		if len(removedResult.Data) > 0 {
-			if count, ok := removedResult.Data[0]["count"].(float64); ok {
-				removedCount = int64(count)
-			}
-		}
-
-		if len(modifiedResult.Data) > 0 {
-			if count, ok := modifiedResult.Data[0]["count"].(float64); ok {
-				modifiedCount = int64(count)
-			}
-		}
-
-		totalChanges := addedCount + removedCount + modifiedCount
-		summary := fmt.Sprintf("Comparison completed: %d total changes (%d added, %d removed, %d modified)", totalChanges, addedCount, removedCount, modifiedCount)
-
-		insights := []string{}
-		if totalChanges == 0 {
-			insights = append(insights, "No differences found between snapshots")
-		} else {
-			if addedCount > 0 {
-				insights = append(insights, fmt.Sprintf("%d keys were added", addedCount))
-			}
-			if removedCount > 0 {
-				insights = append(insights, fmt.Sprintf("%d keys were removed", removedCount))
-			}
-			if modifiedCount > 0 {
-				insights = append(insights, fmt.Sprintf("%d keys were modified", modifiedCount))
-			}
-		}
-
 		return &AnalysisResult{
-			Type:    "comparison",
-			Summary: summary,
-			Details: map[string]interface{}{
-				"summary": map[string]interface{}{
-					"total_changes": totalChanges,
-					"added":         addedCount,
-					"removed":       removedCount,
-					"modified":      modifiedCount,
-				},
-				"snapshot1": snapshot1,
-				"snapshot2": snapshot2,
-			},
-			Insights: insights,
+			Type:     "comparison",
+			Summary:  fmt.Sprintf("Found %d revision tuples removed from %s", result.Count, snapshot1),
+			Details:  map[string]interface{}{"removed_revisions": result.Data},
+			Insights: []string{fmt.Sprintf("Found %d revision tuples removed between snapshots (includes updates to existing keys)", result.Count)},
+		}, nil
+
+	default:
+		return &AnalysisResult{
+			Type:     "comparison",
+			Summary:  fmt.Sprintf("Unknown diff type: %s", diffType),
+			Details:  map[string]interface{}{"error": "Supported diff types: added, removed, added_revisions, removed_revisions"},
+			Insights: []string{"Supported diff types: 'added', 'removed' (key-level), 'added_revisions', 'removed_revisions' (revision-level)"},
 		}, nil
 	}
 }
 
+// diff finds (key, revision) tuples that exist in sourceSnapshot but not in targetSnapshot
+func (e *Engine) diff(ctx context.Context, sourceSnapshot, targetSnapshot string) (*QueryResult, error) {
+	query := fmt.Sprintf(`
+		SELECT s2.key, s2.createRevision, s2.modRevision
+		FROM %s s2 
+		LEFT JOIN %s s1 ON s1.key = s2.key 
+			AND s1.createRevision = s2.createRevision 
+			AND s1.modRevision = s2.modRevision
+		WHERE s1.key IS NULL
+		ORDER BY s2.key, s2.modRevision
+	`, sourceSnapshot, targetSnapshot)
+
+	return e.ExecuteQuery(ctx, query, "")
+}
+
+// diffKeys finds keys that exist in sourceSnapshot but not in targetSnapshot (ignoring revisions)
+func (e *Engine) diffKeys(ctx context.Context, sourceSnapshot, targetSnapshot string) (*QueryResult, error) {
+	query := fmt.Sprintf(`
+		SELECT s1.key, s1.createRevision, s1.modRevision
+		FROM %s s1 
+		LEFT JOIN %s s2 ON s1.key = s2.key 
+		WHERE s2.key IS NULL
+		ORDER BY s1.key
+	`, sourceSnapshot, targetSnapshot)
+
+	return e.ExecuteQuery(ctx, query, "")
+}
+
 // GetNamespaceAnalysis analyzes namespace usage patterns
-func (e *Engine) GetNamespaceAnalysis(ctx context.Context, snapshot, limit string) (*AnalysisResult, error) {
+func (e *Engine) GetNamespaceAnalysis(ctx context.Context, snapshot string, limit string) (*AnalysisResult, error) {
 	// Query for namespace storage usage
 	query := fmt.Sprintf(`
 		SELECT namespace, COUNT(*) as object_count, SUM(valueSize) as total_size_bytes, AVG(valueSize) as avg_size_bytes
