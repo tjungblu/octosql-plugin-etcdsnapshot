@@ -1,0 +1,79 @@
+project_name: octosql-plugin-etcdsnapshot
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod download
+
+builds:
+  - id: octosql-plugin
+    main: ./cmd/plugin
+    binary: octosql-plugin-etcdsnapshot
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+
+  - id: mcp-server
+    main: ./cmd/mcp-server
+    binary: etcdsnapshot-mcp-server
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+
+archives:
+  - id: octosql-plugin-archive
+    builds:
+      - octosql-plugin
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: tar.gz
+    files:
+      - LICENSE
+      - README.md
+
+  - id: mcp-server-archive
+    builds:
+      - mcp-server
+    name_template: "etcdsnapshot-mcp-server_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: tar.gz
+    files:
+      - LICENSE
+      - README.md
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^chore:'
+      - '^style:'
+      - '^refactor:'
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: tjungblu
+    name: octosql-plugin-etcdsnapshot
+  draft: false
+  prerelease: auto
