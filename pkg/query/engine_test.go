@@ -70,7 +70,7 @@ func TestExecuteQueryWithInvalidQuery(t *testing.T) {
 	engine, err := NewEngine()
 	require.NoError(t, err)
 
-	absPath, err := filepath.Abs("../../etcdsnapshot/data/basic.snapshot")
+	absPath, err := filepath.Abs("../../pkg/etcdsnapshot/data/basic.snapshot")
 	require.NoError(t, err)
 
 	_, err = engine.ExecuteQuery(context.Background(), "INVALID SQL", absPath)

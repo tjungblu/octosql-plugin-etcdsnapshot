@@ -9,7 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/tjungblu/octosql-plugin-etcdsnapshot/internal/mcp"
+	"github.com/tjungblu/octosql-plugin-etcdsnapshot/pkg/mcp"
 )
 
 func main() {

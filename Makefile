@@ -26,7 +26,7 @@ release:
 
 .PHONY: build
 build:
-	$(GO) build -o ${BINARY} main.go
+	$(GO) build -o ${BINARY} cmd/plugin/main.go
 
 .PHONY: build-mcp
 build-mcp:

@@ -6,7 +6,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/tjungblu/octosql-plugin-etcdsnapshot/internal/query"
+	"github.com/tjungblu/octosql-plugin-etcdsnapshot/pkg/query"
 )
 
 // Config holds the MCP server configuration
