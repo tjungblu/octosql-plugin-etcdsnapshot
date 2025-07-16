@@ -1,2 +1,5 @@
 .idea
 octosql-plugin-etcdsnapshot
+etcdsnapshot-mcp-server
+snapshots
+test-client

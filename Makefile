@@ -6,14 +6,16 @@ TESTFLAGS    :=
 LDFLAGS      :=
 GOFLAGS      :=
 BINARY       := octosql-plugin-etcdsnapshot
+MCP_BINARY   := etcdsnapshot-mcp-server
 VERSION      := 0.1.5
 VVERSION      := "v$(VERSION)"
 OCTOSQLPATH  := ${HOME}/.octosql/plugins/etcdsnapshot/octosql-plugin-etcdsnapshot/${VERSION}/
+BIN_PATH     := /usr/local/bin/
 
 # Required for globs to work correctly
 SHELL=/bin/bash
 
-.DEFAULT_GOAL := unit-test build
+.DEFAULT_GOAL := build-all
 
 .PHONY: release
 release:
@@ -24,15 +26,23 @@ release:
 
 .PHONY: build
 build:
-	$(GO) build -o ${BINARY} main.go
+	$(GO) build -o ${BINARY} cmd/plugin/main.go
+
+.PHONY: build-mcp
+build-mcp:
+	$(GO) build -o ${MCP_BINARY} cmd/mcp-server/main.go
+
+.PHONY: build-all
+build-all: build build-mcp
 
 .PHONY: install
-install: build
+install: build-all
 	mkdir -p ${OCTOSQLPATH}
 	cp ${BINARY} ${OCTOSQLPATH}
+	sudo cp ${MCP_BINARY} ${BIN_PATH}
 
-.PHONY: unit-test
-unit-test:
+.PHONY: test
+test:
 	@echo
-	@echo "==> Running unit tests <=="
+	@echo "==> Running tests <=="
 	$(GO) test $(GOFLAGS) $(TESTS) $(TESTFLAGS)

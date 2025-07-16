@@ -68,6 +68,67 @@ $ octosql "SELECT * FROM etcd.snapshot" --describe
 * `lease` contains the lease id, if a lease is attached to that key, a value of zero means no lease
 
 
+In addition to the content, you can also find meta information about that snapshot. This allows
+you to look into various database sizes, page usage and other otherwise hidden information in the underlying bbolt database.
+
+```sql
+$ octosql "SELECT * FROM etcd.snapshot?meta=true" --describe
++------------------------------+---------+------------+
+|             name             |  type   | time_field |
++------------------------------+---------+------------+
+| 'activeLeases'               | 'Int'   | false      |
+| 'averageValueSize'           | 'Int'   | false      |
+| 'avgRevisionsPerKey'         | 'Float' | false      |
+| 'defaultQuota'               | 'Int'   | false      |
+| 'estimatedCompactionSavings' | 'Int'   | false      |
+| 'fragmentationBytes'         | 'Int'   | false      |
+| 'fragmentationRatio'         | 'Float' | false      |
+| 'keysWithLeases'             | 'Int'   | false      |
+| 'keysWithMultipleRevisions'  | 'Int'   | false      |
+| 'largestValueSize'           | 'Int'   | false      |
+| 'maxRevision'                | 'Int'   | false      |
+| 'minRevision'                | 'Int'   | false      |
+| 'quotaRemaining'             | 'Int'   | false      |
+| 'quotaUsagePercent'          | 'Float' | false      |
+| 'quotaUsageRatio'            | 'Float' | false      |
+| 'revisionRange'              | 'Int'   | false      |
+| 'size'                       | 'Int'   | false      |
+| 'sizeFree'                   | 'Int'   | false      |
+| 'sizeInUse'                  | 'Int'   | false      |
+| 'smallestValueSize'          | 'Int'   | false      |
+| 'totalKeys'                  | 'Int'   | false      |
+| 'totalRevisions'             | 'Int'   | false      |
+| 'totalValueSize'             | 'Int'   | false      |
+| 'uniqueKeys'                 | 'Int'   | false      |
++------------------------------+---------+------------+
+```
+
+* `size` is the total size of the entire database file in bytes
+* `sizeInUse` is the number of bytes actually used in the database
+* `sizeFree` is the free space in the database (size - sizeInUse)
+* `fragmentationRatio` is the ratio of fragmented space (sizeFree/size, between 0.0-1.0)
+* `fragmentationBytes` is the total fragmented space in bytes (same as sizeFree)
+* `totalKeys` is the total number of key-value pairs in the database
+* `totalRevisions` is the total number of unique revision numbers
+* `maxRevision` is the highest revision number in the database
+* `minRevision` is the lowest revision number in the database
+* `revisionRange` is the difference between max and min revision numbers
+* `avgRevisionsPerKey` is the average number of revisions per unique key
+* `defaultQuota` is the default etcd storage quota (8GB)
+* `quotaUsageRatio` is the ratio of current size to quota (0.0-1.0)
+* `quotaUsagePercent` is the percentage of quota used (quotaUsageRatio * 100)
+* `quotaRemaining` is the remaining quota space in bytes
+* `totalValueSize` is the sum of all value sizes in bytes
+* `averageValueSize` is the average size of values in bytes
+* `largestValueSize` is the size of the largest value in bytes
+* `smallestValueSize` is the size of the smallest value in bytes
+* `keysWithMultipleRevisions` is the number of keys that have multiple revisions
+* `uniqueKeys` is the number of unique keys in the database
+* `keysWithLeases` is the number of keys that have leases attached
+* `activeLeases` is the number of unique lease IDs in use
+* `estimatedCompactionSavings` is the estimated bytes that could be saved by compaction
+
+
 ## Examples
 
 Awesome queries you can run against your etcd (snapshots):
@@ -236,6 +297,30 @@ $ octosql "SELECT d.key, SUM(valueSize) AS SZ FROM etcd.snapshot d GROUP BY d.ke
 +--------------------------------------------------------------------------------------------------+------------+
 
 ```
+
+## 🤖 MCP Server for AI Assistants
+
+This repository now includes an **MCP (Model Context Protocol) server** that allows AI assistants to analyze etcd snapshots using natural language! 
+
+### What is MCP?
+MCP enables AI assistants to interact with external tools and data sources. Our MCP server transforms this octosql plugin into a powerful cluster analysis tool that AI assistants can use directly.
+
+### Key Features
+- **Natural Language Queries**: Ask questions like "Show me all pods in production namespace"
+- **Intelligent Analysis**: Get cluster overviews, security scans, and performance insights
+- **Snapshot Comparison**: Compare different cluster states over time
+- **Security Assessment**: Identify potential security issues and misconfigurations
+
+### Quick Start with MCP
+```bash
+# Build the MCP server
+make build-mcp
+
+# Run the server (no environment variables needed)
+./etcdsnapshot-mcp-server
+```
+
+See the [MCP Server Documentation](docs/mcp-server.md) for detailed usage examples and integration instructions.
 
 ## Installation
 
