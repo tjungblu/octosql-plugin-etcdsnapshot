@@ -73,11 +73,56 @@ func produceFromBBoltBackend(ctx ExecutionContext, produce ProduceFn, snapshotPa
 }
 
 func produceMetaFromBackend(ctx ExecutionContext, produce ProduceFn, etcdBackend backend.Backend, fieldIndices []int) error {
+	// Get basic size information
+	size := etcdBackend.Size()
+	sizeInUse := etcdBackend.SizeInUse()
+	sizeFree := size - sizeInUse
+
+	stats := calculateEtcdStats(etcdBackend)
+
+	// Calculate derived metrics
+	fragmentationRatio := float64(sizeFree) / float64(size) * 100
+	defaultQuota := int64(8 * 1024 * 1024 * 1024) // 8GB default
+	quotaUsageRatio := float64(size) / float64(defaultQuota)
+	quotaUsagePercent := quotaUsageRatio * 100
+	quotaRemaining := defaultQuota - size
 
 	values := []octosql.Value{
-		octosql.NewFloat(float64(etcdBackend.Size())),
-		octosql.NewFloat(float64(etcdBackend.SizeInUse())),
-		octosql.NewFloat(float64(etcdBackend.Size() - etcdBackend.SizeInUse())),
+		// Basic storage info
+		octosql.NewInt(int(size)),
+		octosql.NewInt(int(sizeInUse)),
+		octosql.NewInt(int(sizeFree)),
+
+		// Defragmentation metrics
+		octosql.NewFloat(fragmentationRatio),
+		octosql.NewInt(int(sizeFree)),
+
+		// Compaction metrics
+		octosql.NewInt(stats.totalKeys),
+		octosql.NewInt(stats.totalRevisions),
+		octosql.NewInt(stats.maxRevision),
+		octosql.NewInt(stats.minRevision),
+		octosql.NewInt(stats.maxRevision - stats.minRevision),
+		octosql.NewFloat(stats.avgRevisionsPerKey),
+
+		// Storage quota info
+		octosql.NewInt(int(defaultQuota)),
+		octosql.NewFloat(quotaUsageRatio),
+		octosql.NewFloat(quotaUsagePercent),
+		octosql.NewInt(int(quotaRemaining)),
+
+		// Value size statistics
+		octosql.NewInt(stats.totalValueSize),
+		octosql.NewInt(stats.averageValueSize),
+		octosql.NewInt(stats.largestValueSize),
+		octosql.NewInt(stats.smallestValueSize),
+
+		// Key distribution
+		octosql.NewInt(stats.keysWithMultipleRevisions),
+		octosql.NewInt(stats.uniqueKeys),
+		octosql.NewInt(stats.keysWithLeases),
+		octosql.NewInt(stats.activeLeases),
+		octosql.NewInt(stats.estimatedCompactionSavings),
 	}
 
 	// remove the fields we don't need for a given query
@@ -208,4 +253,101 @@ func revToBytes(main, sub int64) []byte {
 
 func bytesToRev(bytes []byte) (main, sub int64) {
 	return int64(binary.BigEndian.Uint64(bytes[0:8])), int64(binary.BigEndian.Uint64(bytes[9:]))
+}
+
+type EtcdStats struct {
+	totalKeys                  int
+	totalRevisions             int
+	maxRevision                int
+	minRevision                int
+	avgRevisionsPerKey         float64
+	totalValueSize             int
+	averageValueSize           int
+	largestValueSize           int
+	smallestValueSize          int
+	keysWithMultipleRevisions  int
+	uniqueKeys                 int
+	keysWithLeases             int
+	activeLeases               int
+	estimatedCompactionSavings int
+}
+
+func calculateEtcdStats(etcdBackend backend.Backend) EtcdStats {
+	stats := EtcdStats{
+		minRevision:       math.MaxInt32,
+		smallestValueSize: math.MaxInt32,
+	}
+
+	totalValueSize := 0
+	uniqueLeases := make(map[int64]bool)
+	uniqueRevisions := make(map[int64]bool) // Track unique revision numbers
+
+	// Track total value sizes per key
+	keyValueSums := make(map[string]int)
+	keyRevisionCounts := make(map[string]int)
+
+	keys, vals := etcdBackend.ReadTx().UnsafeRange(buckets.Key, revToBytes(0, 0), revToBytes(math.MaxInt64, math.MaxInt64), math.MaxInt64)
+	for i := 0; i < len(keys); i++ {
+		kv := mvccpb.KeyValue{}
+		if err := kv.Unmarshal(vals[i]); err != nil {
+			continue
+		}
+
+		stats.totalKeys++
+
+		// Track unique revisions
+		uniqueRevisions[kv.ModRevision] = true
+
+		// Track revision ranges
+		if int(kv.ModRevision) > stats.maxRevision {
+			stats.maxRevision = int(kv.ModRevision)
+		}
+		if int(kv.CreateRevision) < stats.minRevision {
+			stats.minRevision = int(kv.ModRevision)
+		}
+
+		// Track value sizes
+		valueSize := len(kv.Value)
+		totalValueSize += valueSize
+		if valueSize > stats.largestValueSize {
+			stats.largestValueSize = valueSize
+		}
+		if valueSize < stats.smallestValueSize {
+			stats.smallestValueSize = valueSize
+		}
+
+		// Track per-key sums and counts
+		key := string(kv.Key)
+		keyValueSums[key] += valueSize
+		keyRevisionCounts[key]++
+
+		// Track leases
+		if kv.Lease != 0 {
+			stats.keysWithLeases++
+			uniqueLeases[kv.Lease] = true
+		}
+	}
+
+	// Calculate derived stats
+	stats.uniqueKeys = len(keyValueSums)
+	stats.activeLeases = len(uniqueLeases)
+	stats.totalValueSize = totalValueSize
+	stats.totalRevisions = len(uniqueRevisions) // Now correctly counts unique revisions
+
+	if stats.totalKeys > 0 {
+		stats.avgRevisionsPerKey = float64(stats.totalRevisions) / float64(stats.uniqueKeys) // Also fix this calculation
+		stats.averageValueSize = totalValueSize / stats.totalKeys
+	}
+
+	// Calculate compaction savings: sum of all values for keys with multiple revisions
+	compactionSavings := 0
+	for key, totalSize := range keyValueSums {
+		if keyRevisionCounts[key] > 1 {
+			stats.keysWithMultipleRevisions++
+			compactionSavings += totalSize
+		}
+	}
+	stats.estimatedCompactionSavings = compactionSavings
+
+	return stats
 }

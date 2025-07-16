@@ -38,13 +38,42 @@ func TestDatabaseGetTableWithMetaOption(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "test.snapshot", etcdDS.path)
 	require.Equal(t, SchemaMeta, etcdDS.schema)
-	require.Equal(t, 3, len(etcdDS.schemaFields))
+	require.Equal(t, 24, len(etcdDS.schemaFields))
 
-	// Check schema fields for meta
-	expectedFields := []string{"size", "sizeInUse", "sizeFree"}
-	for i, field := range etcdDS.schemaFields {
-		require.Equal(t, expectedFields[i], field.Name)
-		require.Equal(t, octosql.Int, field.Type)
+	// Check first few schema fields for meta
+	expectedFields := []struct {
+		name string
+		typ  octosql.Type
+	}{
+		{"size", octosql.Int},
+		{"sizeInUse", octosql.Int},
+		{"sizeFree", octosql.Int},
+		{"fragmentationRatio", octosql.Float},
+		{"fragmentationBytes", octosql.Int},
+		{"totalKeys", octosql.Int},
+		{"totalRevisions", octosql.Int},
+		{"maxRevision", octosql.Int},
+		{"minRevision", octosql.Int},
+		{"revisionRange", octosql.Int},
+		{"avgRevisionsPerKey", octosql.Float},
+		{"defaultQuota", octosql.Int},
+		{"quotaUsageRatio", octosql.Float},
+		{"quotaUsagePercent", octosql.Float},
+		{"quotaRemaining", octosql.Int},
+		{"totalValueSize", octosql.Int},
+		{"averageValueSize", octosql.Int},
+		{"largestValueSize", octosql.Int},
+		{"smallestValueSize", octosql.Int},
+		{"keysWithMultipleRevisions", octosql.Int},
+		{"uniqueKeys", octosql.Int},
+		{"keysWithLeases", octosql.Int},
+		{"activeLeases", octosql.Int},
+		{"estimatedCompactionSavings", octosql.Int},
+	}
+
+	for i, expected := range expectedFields {
+		require.Equal(t, expected.name, etcdDS.schemaFields[i].Name)
+		require.Equal(t, expected.typ, etcdDS.schemaFields[i].Type)
 	}
 }
 

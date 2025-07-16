@@ -3,6 +3,7 @@ package etcdsnapshot
 import (
 	"context"
 	"fmt"
+
 	"github.com/cube2222/octosql/execution"
 	"github.com/cube2222/octosql/octosql"
 	"github.com/cube2222/octosql/physical"
@@ -43,6 +44,7 @@ func (d Database) ListTables(ctx context.Context) ([]string, error) {
 func (d Database) GetTable(ctx context.Context, name string, options map[string]string) (physical.DatasourceImplementation, physical.Schema, error) {
 	if _, ok := options["meta"]; ok {
 		schemaFields := []physical.SchemaField{
+			// Basic storage info (indices 0-2)
 			{
 				// size of the entire database file
 				Name: "size",
@@ -58,9 +60,104 @@ func (d Database) GetTable(ctx context.Context, name string, options map[string]
 				Name: "sizeFree",
 				Type: octosql.Int,
 			},
+
+			// Defragmentation metrics (indices 3-4)
+			{
+				Name: "fragmentationRatio",
+				Type: octosql.Float,
+			},
+			{
+				Name: "fragmentationBytes",
+				Type: octosql.Int,
+			},
+
+			// Compaction metrics (indices 5-10)
+			{
+				Name: "totalKeys",
+				Type: octosql.Int,
+			},
+			{
+				Name: "totalRevisions",
+				Type: octosql.Int,
+			},
+			{
+				Name: "maxRevision",
+				Type: octosql.Int,
+			},
+			{
+				Name: "minRevision",
+				Type: octosql.Int,
+			},
+			{
+				Name: "revisionRange",
+				Type: octosql.Int,
+			},
+			{
+				Name: "avgRevisionsPerKey",
+				Type: octosql.Float,
+			},
+
+			// Storage quota info (indices 11-14)
+			{
+				Name: "defaultQuota",
+				Type: octosql.Int,
+			},
+			{
+				Name: "quotaUsageRatio",
+				Type: octosql.Float,
+			},
+			{
+				Name: "quotaUsagePercent",
+				Type: octosql.Float,
+			},
+			{
+				Name: "quotaRemaining",
+				Type: octosql.Int,
+			},
+
+			// Value size statistics (indices 15-18)
+			{
+				Name: "totalValueSize",
+				Type: octosql.Int,
+			},
+			{
+				Name: "averageValueSize",
+				Type: octosql.Int,
+			},
+			{
+				Name: "largestValueSize",
+				Type: octosql.Int,
+			},
+			{
+				Name: "smallestValueSize",
+				Type: octosql.Int,
+			},
+
+			// Key distribution (indices 19-23)
+			{
+				Name: "keysWithMultipleRevisions",
+				Type: octosql.Int,
+			},
+			{
+				Name: "uniqueKeys",
+				Type: octosql.Int,
+			},
+			{
+				Name: "keysWithLeases",
+				Type: octosql.Int,
+			},
+			{
+				Name: "activeLeases",
+				Type: octosql.Int,
+			},
+			{
+				Name: "estimatedCompactionSavings",
+				Type: octosql.Int,
+			},
 		}
 
-		return &etcdSnapshotDataSource{path: name, schemaFields: schemaFields, schema: SchemaMeta}, physical.NewSchema(schemaFields, -1, physical.WithNoRetractions(true)), nil
+		return &etcdSnapshotDataSource{path: name, schemaFields: schemaFields, schema: SchemaMeta},
+			physical.NewSchema(schemaFields, -1, physical.WithNoRetractions(true)), nil
 	}
 
 	schemaFields := []physical.SchemaField{
