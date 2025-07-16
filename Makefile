@@ -7,7 +7,7 @@ LDFLAGS      :=
 GOFLAGS      :=
 BINARY       := octosql-plugin-etcdsnapshot
 MCP_BINARY   := etcdsnapshot-mcp-server
-VERSION      := 0.1.5
+VERSION      := 0.1.6
 VVERSION      := "v$(VERSION)"
 OCTOSQLPATH  := ${HOME}/.octosql/plugins/etcdsnapshot/octosql-plugin-etcdsnapshot/${VERSION}/
 BIN_PATH     := /usr/local/bin/
@@ -46,3 +46,4 @@ test:
 	@echo
 	@echo "==> Running tests <=="
 	$(GO) test $(GOFLAGS) $(TESTS) $(TESTFLAGS)
+

@@ -2,7 +2,7 @@
   "binary_download_url_pattern": "https://github.com/tjungblu/octosql-plugin-etcdsnapshot/releases/download/v{{version}}/octosql-plugin-etcdsnapshot_{{version}}_{{os}}_{{arch}}.tar.gz",
   "versions": [
     {
-      "number": "0.1.5"
+      "number": "0.1.6"
     }
   ]
 }
