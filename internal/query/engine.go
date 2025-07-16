@@ -12,7 +12,6 @@ import (
 
 // Engine wraps the octosql plugin functionality
 type Engine struct {
-	snapshotDir string
 }
 
 // QueryResult represents the result of a query
@@ -31,35 +30,27 @@ type AnalysisResult struct {
 }
 
 // NewEngine creates a new query engine
-func NewEngine(snapshotDir string) (*Engine, error) {
-	// Ensure snapshot directory exists
-	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create snapshot directory: %w", err)
-	}
-
-	return &Engine{
-		snapshotDir: snapshotDir,
-	}, nil
+func NewEngine() (*Engine, error) {
+	return &Engine{}, nil
 }
 
 // ExecuteQuery executes a SQL query against an etcd snapshot
 func (e *Engine) ExecuteQuery(ctx context.Context, query string, snapshot string) (*QueryResult, error) {
-	snapshotPath, err := e.resolveSnapshot(snapshot)
-	if err != nil {
-		return nil, err
+	if snapshot != "" {
+		snapshotPath, err := e.resolveSnapshot(snapshot)
+		if err != nil {
+			return nil, err
+		}
+		query = strings.ReplaceAll(query, "{{SNAPSHOT}}", snapshotPath)
 	}
 
-	// Replace placeholder with actual snapshot path
-	updatedQuery := strings.ReplaceAll(query, "{{SNAPSHOT}}", snapshotPath)
-
-	// Execute octosql query
-	cmd := exec.CommandContext(ctx, "octosql", updatedQuery, "--output", "json")
+	cmd := exec.CommandContext(ctx, "octosql", query, "--output", "json")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf("failed to execute query: exit code %d, query: %s, output: %s", exitErr.ExitCode(), updatedQuery, string(output))
+			return nil, fmt.Errorf("failed to execute query: exit code %d, query: %s, output: %s", exitErr.ExitCode(), query, string(output))
 		}
-		return nil, fmt.Errorf("failed to execute query: %w, query: %s, output: %s", err, updatedQuery, string(output))
+		return nil, fmt.Errorf("failed to execute query: %w, query: %s, output: %s", err, query, string(output))
 	}
 
 	// Parse newline-delimited JSON output
@@ -463,69 +454,18 @@ func (e *Engine) GetNamespaceAnalysis(ctx context.Context, snapshot string, limi
 // resolveSnapshot resolves the snapshot path
 func (e *Engine) resolveSnapshot(snapshot string) (string, error) {
 	if snapshot == "" {
-		// Find the latest snapshot
-		globPattern := filepath.Join(e.snapshotDir, "*.snapshot")
-		files, err := filepath.Glob(globPattern)
-		if err != nil {
-			return "", fmt.Errorf("failed to find snapshots using pattern '%s': %w", globPattern, err)
-		}
-
-		// Get current working directory for debugging
-		cwd, _ := os.Getwd()
-
-		// Check if snapshot directory exists
-		if _, err := os.Stat(e.snapshotDir); os.IsNotExist(err) {
-			return "", fmt.Errorf("snapshot directory '%s' does not exist (cwd: %s)", e.snapshotDir, cwd)
-		}
-
-		// List all files in snapshot directory for debugging
-		entries, _ := os.ReadDir(e.snapshotDir)
-		var allFiles []string
-		for _, entry := range entries {
-			allFiles = append(allFiles, entry.Name())
-		}
-
-		if len(files) == 0 {
-			return "", fmt.Errorf("no snapshots found in '%s' (cwd: %s, pattern: %s, all files: %v)",
-				e.snapshotDir, cwd, globPattern, allFiles)
-		}
-
-		latest := files[0]
-		var latestTime int64
-		for _, file := range files {
-			info, err := os.Stat(file)
-			if err != nil {
-				continue
-			}
-
-			if info.ModTime().Unix() > latestTime {
-				latestTime = info.ModTime().Unix()
-				latest = file
-			}
-		}
-
-		return latest, nil
+		return "", fmt.Errorf("snapshot path is required and must be an absolute path")
 	}
 
-	// If it's already an absolute path, use it
-	if filepath.IsAbs(snapshot) {
-		// Check if absolute path exists
-		if _, err := os.Stat(snapshot); os.IsNotExist(err) {
-			cwd, _ := os.Getwd()
-			return "", fmt.Errorf("absolute snapshot path '%s' does not exist (cwd: %s)", snapshot, cwd)
-		}
-		return snapshot, nil
+	// Only accept absolute paths
+	if !filepath.IsAbs(snapshot) {
+		return "", fmt.Errorf("snapshot path must be absolute, got: %s", snapshot)
 	}
 
-	// Otherwise, resolve relative to snapshot directory
-	resolvedPath := filepath.Join(e.snapshotDir, snapshot)
-
-	// Check if resolved path exists
-	if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
-		cwd, _ := os.Getwd()
-		return "", fmt.Errorf("resolved snapshot path '%s' does not exist (snapshot: %s, snapshotDir: %s, cwd: %s)",
-			resolvedPath, snapshot, e.snapshotDir, cwd)
+	// Check if absolute path exists
+	if _, err := os.Stat(snapshot); os.IsNotExist(err) {
+		return "", fmt.Errorf("snapshot path '%s' does not exist", snapshot)
 	}
 
-	return resolvedPath, nil
+	return snapshot, nil
 }

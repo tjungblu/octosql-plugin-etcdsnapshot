@@ -26,7 +26,6 @@ func main() {
 		Name:        "etcd-snapshot-analyzer",
 		Version:     "1.0.0",
 		Description: "MCP server for analyzing etcd snapshots from Kubernetes/OpenShift clusters",
-		SnapshotDir: getSnapshotDir(),
 	})
 	if err != nil {
 		log.Fatalf("Failed to create MCP server: %v", err)
@@ -53,11 +52,4 @@ func main() {
 		log.Println("MCP server terminated normally")
 	}
 	cancel()
-}
-
-func getSnapshotDir() string {
-	if dir := os.Getenv("ETCD_SNAPSHOT_DIR"); dir != "" {
-		return dir
-	}
-	return "./snapshots"
 }

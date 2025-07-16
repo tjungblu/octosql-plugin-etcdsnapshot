@@ -255,8 +255,7 @@ MCP enables AI assistants to interact with external tools and data sources. Our 
 # Build the MCP server
 make build-mcp
 
-# Run the server
-export ETCD_SNAPSHOT_DIR=/path/to/snapshots
+# Run the server (no environment variables needed)
 ./etcdsnapshot-mcp-server
 ```
 

@@ -11,7 +11,6 @@ func TestNewServer(t *testing.T) {
 		Name:        "test-server",
 		Version:     "1.0.0",
 		Description: "Test server description",
-		SnapshotDir: t.TempDir(),
 	}
 
 	server, err := NewServer(config)
@@ -22,17 +21,16 @@ func TestNewServer(t *testing.T) {
 	require.NotNil(t, server.mcpServer)
 }
 
-func TestNewServerWithInvalidSnapshotDir(t *testing.T) {
+func TestNewServerAlwaysSucceeds(t *testing.T) {
 	config := Config{
 		Name:        "test-server",
 		Version:     "1.0.0",
 		Description: "Test server description",
-		SnapshotDir: "/invalid/path/that/cannot/be/created",
 	}
 
-	_, err := NewServer(config)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "failed to create query engine")
+	server, err := NewServer(config)
+	require.NoError(t, err)
+	require.NotNil(t, server)
 }
 
 func TestServerConfig(t *testing.T) {
@@ -40,7 +38,6 @@ func TestServerConfig(t *testing.T) {
 		Name:        "etcd-snapshot-analyzer",
 		Version:     "2.0.0",
 		Description: "ETCD Snapshot Analysis Tool",
-		SnapshotDir: t.TempDir(),
 	}
 
 	server, err := NewServer(config)

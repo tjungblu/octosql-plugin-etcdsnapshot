@@ -14,7 +14,6 @@ type Config struct {
 	Name        string
 	Version     string
 	Description string
-	SnapshotDir string
 }
 
 // Server represents the MCP server
@@ -27,7 +26,7 @@ type Server struct {
 // NewServer creates a new MCP server
 func NewServer(config Config) (*Server, error) {
 	// Initialize query engine
-	queryEngine, err := query.NewEngine(config.SnapshotDir)
+	queryEngine, err := query.NewEngine()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create query engine: %w", err)
 	}
@@ -66,7 +65,8 @@ func (s *Server) registerTools() {
 			mcp.Description("SQL query to execute. Use {{SNAPSHOT}} as placeholder for snapshot path and table alias 't' for queries (e.g., 'SELECT namespace, COUNT(*) FROM {{SNAPSHOT}} t GROUP BY namespace ORDER BY COUNT(*) DESC LIMIT 5'). Note: 'key' is reserved, use 't.key' instead."),
 		),
 		mcp.WithString("snapshot",
-			mcp.Description("Snapshot file to query (optional, defaults to latest). Can be filename like 'snapshot.db' or absolute path."),
+			mcp.Required(),
+			mcp.Description("Absolute path to the snapshot file to query (e.g., '/path/to/snapshot.db'). Relative paths are not supported."),
 		),
 	)
 
@@ -81,7 +81,8 @@ func (s *Server) registerTools() {
 			mcp.Enum("overview", "resources", "performance"),
 		),
 		mcp.WithString("snapshot",
-			mcp.Description("Snapshot file to analyze (optional, defaults to latest available snapshot)"),
+			mcp.Required(),
+			mcp.Description("Absolute path to the snapshot file to analyze (e.g., '/path/to/snapshot.db'). Relative paths are not supported."),
 		),
 	)
 
@@ -101,7 +102,8 @@ func (s *Server) registerTools() {
 			mcp.Description("Resource name to search for (optional). Can be exact name or partial match."),
 		),
 		mcp.WithString("snapshot",
-			mcp.Description("Snapshot file to search in (optional, defaults to latest)"),
+			mcp.Required(),
+			mcp.Description("Absolute path to the snapshot file to search in (e.g., '/path/to/snapshot.db'). Relative paths are not supported."),
 		),
 	)
 
@@ -112,11 +114,11 @@ func (s *Server) registerTools() {
 		mcp.WithDescription("Compare two etcd snapshots to identify differences over time. Useful for change tracking, debugging, and understanding cluster evolution."),
 		mcp.WithString("snapshot1",
 			mcp.Required(),
-			mcp.Description("First snapshot file (baseline/older snapshot)"),
+			mcp.Description("Absolute path to the first snapshot file (baseline/older snapshot) (e.g., '/path/to/snapshot1.db'). Relative paths are not supported."),
 		),
 		mcp.WithString("snapshot2",
 			mcp.Required(),
-			mcp.Description("Second snapshot file (comparison/newer snapshot)"),
+			mcp.Description("Absolute path to the second snapshot file (comparison/newer snapshot) (e.g., '/path/to/snapshot2.db'). Relative paths are not supported."),
 		),
 		mcp.WithString("diff_type",
 			mcp.Description("Type of changes to show: 'added' (new keys), 'removed' (deleted keys), 'added_revisions' (new revision tuples), 'removed_revisions' (deleted revision tuples)"),
@@ -131,7 +133,8 @@ func (s *Server) registerTools() {
 	namespaceTool := mcp.NewTool("analyze_namespaces",
 		mcp.WithDescription("Analyze namespace usage patterns including storage consumption, object counts, and resource distribution. Provides insights into which namespaces are using the most etcd storage."),
 		mcp.WithString("snapshot",
-			mcp.Description("Snapshot file to analyze (optional, defaults to latest)"),
+			mcp.Required(),
+			mcp.Description("Absolute path to the snapshot file to analyze (e.g., '/path/to/snapshot.db'). Relative paths are not supported."),
 		),
 		mcp.WithString("limit",
 			mcp.Description("Number of top namespaces to return (default: 10)"),
@@ -148,7 +151,10 @@ func (s *Server) handleQueryEtcd(ctx context.Context, request mcp.CallToolReques
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	snapshot := request.GetString("snapshot", "")
+	snapshot, err := request.RequireString("snapshot")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 
 	result, err := s.queryEngine.ExecuteQuery(ctx, query, snapshot)
 	if err != nil {
@@ -164,7 +170,10 @@ func (s *Server) handleAnalyzeCluster(ctx context.Context, request mcp.CallToolR
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	snapshot := request.GetString("snapshot", "")
+	snapshot, err := request.RequireString("snapshot")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 
 	var result interface{}
 	switch analysisType {
@@ -193,7 +202,10 @@ func (s *Server) handleFindResources(ctx context.Context, request mcp.CallToolRe
 
 	namespace := request.GetString("namespace", "")
 	name := request.GetString("name", "")
-	snapshot := request.GetString("snapshot", "")
+	snapshot, err := request.RequireString("snapshot")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 
 	result, err := s.queryEngine.FindResources(ctx, resourceType, namespace, name, snapshot)
 	if err != nil {
@@ -225,7 +237,11 @@ func (s *Server) handleCompareSnapshots(ctx context.Context, request mcp.CallToo
 }
 
 func (s *Server) handleNamespaceAnalysis(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	snapshot := request.GetString("snapshot", "")
+	snapshot, err := request.RequireString("snapshot")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	limit := request.GetString("limit", "10")
 
 	result, err := s.queryEngine.GetNamespaceAnalysis(ctx, snapshot, limit)

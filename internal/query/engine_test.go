@@ -6,58 +6,23 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestNewEngine(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	engine, err := NewEngine(tmpDir)
+	engine, err := NewEngine()
 	require.NoError(t, err)
 	require.NotNil(t, engine)
-	require.Equal(t, tmpDir, engine.snapshotDir)
-
-	// Check that directory was created
-	stat, err := os.Stat(tmpDir)
-	require.NoError(t, err)
-	require.True(t, stat.IsDir())
-}
-
-func TestNewEngineWithInvalidDirectory(t *testing.T) {
-	// Try to create engine with path that can't be created (e.g., file already exists)
-	tmpFile := filepath.Join(t.TempDir(), "file")
-	err := os.WriteFile(tmpFile, []byte("test"), 0644)
-	require.NoError(t, err)
-
-	_, err = NewEngine(tmpFile)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "failed to create snapshot directory")
 }
 
 func TestResolveSnapshotWithEmptyString(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Create some test snapshot files
-	snapshots := []string{"a.snapshot", "b.snapshot", "c.snapshot"}
-	for i, snapshot := range snapshots {
-		path := filepath.Join(tmpDir, snapshot)
-		err := os.WriteFile(path, []byte("test"), 0644)
-		require.NoError(t, err)
-
-		// Set different modification times to test "latest" logic
-		modTime := time.Now().Add(time.Duration(i) * time.Hour)
-		err = os.Chtimes(path, modTime, modTime)
-		require.NoError(t, err)
-	}
-
-	engine, err := NewEngine(tmpDir)
+	engine, err := NewEngine()
 	require.NoError(t, err)
 
-	resolved, err := engine.resolveSnapshot("")
-	require.NoError(t, err)
-	require.Contains(t, resolved, "c.snapshot") // Should be the latest
+	_, err = engine.resolveSnapshot("")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "snapshot path is required")
 }
 
 func TestResolveSnapshotWithAbsolutePath(t *testing.T) {
@@ -66,7 +31,7 @@ func TestResolveSnapshotWithAbsolutePath(t *testing.T) {
 	err := os.WriteFile(snapshotPath, []byte("test"), 0644)
 	require.NoError(t, err)
 
-	engine, err := NewEngine(tmpDir)
+	engine, err := NewEngine()
 	require.NoError(t, err)
 
 	resolved, err := engine.resolveSnapshot(snapshotPath)
@@ -75,45 +40,25 @@ func TestResolveSnapshotWithAbsolutePath(t *testing.T) {
 }
 
 func TestResolveSnapshotWithRelativePath(t *testing.T) {
-	tmpDir := t.TempDir()
-	snapshotPath := filepath.Join(tmpDir, "test.snapshot")
-	err := os.WriteFile(snapshotPath, []byte("test"), 0644)
+	engine, err := NewEngine()
 	require.NoError(t, err)
 
-	engine, err := NewEngine(tmpDir)
-	require.NoError(t, err)
-
-	resolved, err := engine.resolveSnapshot("test.snapshot")
-	require.NoError(t, err)
-	require.Equal(t, snapshotPath, resolved)
-}
-
-func TestResolveSnapshotWithNoSnapshots(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	engine, err := NewEngine(tmpDir)
-	require.NoError(t, err)
-
-	_, err = engine.resolveSnapshot("")
+	_, err = engine.resolveSnapshot("test.snapshot")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no snapshots found")
+	require.Contains(t, err.Error(), "snapshot path must be absolute")
 }
 
 func TestResolveSnapshotWithNonexistentFile(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	engine, err := NewEngine(tmpDir)
+	engine, err := NewEngine()
 	require.NoError(t, err)
 
-	_, err = engine.resolveSnapshot("nonexistent.snapshot")
+	_, err = engine.resolveSnapshot("/nonexistent/path.snapshot")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "does not exist")
 }
 
 func TestResolveSnapshotWithNonexistentAbsolutePath(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	engine, err := NewEngine(tmpDir)
+	engine, err := NewEngine()
 	require.NoError(t, err)
 
 	_, err = engine.resolveSnapshot("/nonexistent/path.snapshot")
@@ -122,11 +67,13 @@ func TestResolveSnapshotWithNonexistentAbsolutePath(t *testing.T) {
 }
 
 func TestExecuteQueryWithInvalidQuery(t *testing.T) {
-	// Use current directory to access the snapshot file
-	engine, err := NewEngine(".")
+	engine, err := NewEngine()
 	require.NoError(t, err)
 
-	_, err = engine.ExecuteQuery(context.Background(), "INVALID SQL", "../../etcdsnapshot/data/basic.snapshot")
+	absPath, err := filepath.Abs("../../etcdsnapshot/data/basic.snapshot")
+	require.NoError(t, err)
+
+	_, err = engine.ExecuteQuery(context.Background(), "INVALID SQL", absPath)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to execute query")
 }
@@ -147,11 +94,16 @@ func TestExecuteQueryWithInvalidJSON(t *testing.T) {
 }
 
 func TestGetClusterOverviewStructure(t *testing.T) {
-	// Use home snapshots directory with real snapshot files
-	engine, err := NewEngine(os.ExpandEnv("$HOME/snapshots"))
+	engine, err := NewEngine()
 	require.NoError(t, err)
 
-	result, err := engine.GetClusterOverview(context.Background(), "a.snapshot")
+	// Create a test snapshot path
+	snapshotPath := filepath.Join(os.ExpandEnv("$HOME/snapshots"), "a.snapshot")
+	if _, err := os.Stat(snapshotPath); os.IsNotExist(err) {
+		t.Skip("Test snapshot not found, skipping integration test")
+	}
+
+	result, err := engine.GetClusterOverview(context.Background(), snapshotPath)
 	require.NoError(t, err)
 
 	// Check structure
@@ -164,11 +116,16 @@ func TestGetClusterOverviewStructure(t *testing.T) {
 }
 
 func TestGetResourceAnalysisStructure(t *testing.T) {
-	// Use home snapshots directory with real snapshot files
-	engine, err := NewEngine(os.ExpandEnv("$HOME/snapshots"))
+	engine, err := NewEngine()
 	require.NoError(t, err)
 
-	result, err := engine.GetResourceAnalysis(context.Background(), "a.snapshot")
+	// Create a test snapshot path
+	snapshotPath := filepath.Join(os.ExpandEnv("$HOME/snapshots"), "a.snapshot")
+	if _, err := os.Stat(snapshotPath); os.IsNotExist(err) {
+		t.Skip("Test snapshot not found, skipping integration test")
+	}
+
+	result, err := engine.GetResourceAnalysis(context.Background(), snapshotPath)
 	require.NoError(t, err)
 
 	// Check structure
@@ -180,11 +137,16 @@ func TestGetResourceAnalysisStructure(t *testing.T) {
 }
 
 func TestGetPerformanceAnalysisStructure(t *testing.T) {
-	// Use home snapshots directory with real snapshot files
-	engine, err := NewEngine(os.ExpandEnv("$HOME/snapshots"))
+	engine, err := NewEngine()
 	require.NoError(t, err)
 
-	result, err := engine.GetPerformanceAnalysis(context.Background(), "a.snapshot")
+	// Create a test snapshot path
+	snapshotPath := filepath.Join(os.ExpandEnv("$HOME/snapshots"), "a.snapshot")
+	if _, err := os.Stat(snapshotPath); os.IsNotExist(err) {
+		t.Skip("Test snapshot not found, skipping integration test")
+	}
+
+	result, err := engine.GetPerformanceAnalysis(context.Background(), snapshotPath)
 	require.NoError(t, err)
 
 	// Check structure
@@ -197,12 +159,17 @@ func TestGetPerformanceAnalysisStructure(t *testing.T) {
 }
 
 func TestFindResourcesWithResults(t *testing.T) {
-	// Use home snapshots directory with real snapshot files
-	engine, err := NewEngine(os.ExpandEnv("$HOME/snapshots"))
+	engine, err := NewEngine()
 	require.NoError(t, err)
 
+	// Create a test snapshot path
+	snapshotPath := filepath.Join(os.ExpandEnv("$HOME/snapshots"), "a.snapshot")
+	if _, err := os.Stat(snapshotPath); os.IsNotExist(err) {
+		t.Skip("Test snapshot not found, skipping integration test")
+	}
+
 	// Search for pods in openshift-marketplace namespace (we know this has results)
-	result, err := engine.FindResources(context.Background(), "pods", "openshift-marketplace", "", "a.snapshot")
+	result, err := engine.FindResources(context.Background(), "pods", "openshift-marketplace", "", snapshotPath)
 	require.NoError(t, err)
 
 	// Result should not be nil and should have proper structure
@@ -216,12 +183,17 @@ func TestFindResourcesWithResults(t *testing.T) {
 }
 
 func TestFindResourcesWithNoResults(t *testing.T) {
-	// Use home snapshots directory with real snapshot files
-	engine, err := NewEngine(os.ExpandEnv("$HOME/snapshots"))
+	engine, err := NewEngine()
 	require.NoError(t, err)
 
+	// Create a test snapshot path
+	snapshotPath := filepath.Join(os.ExpandEnv("$HOME/snapshots"), "a.snapshot")
+	if _, err := os.Stat(snapshotPath); os.IsNotExist(err) {
+		t.Skip("Test snapshot not found, skipping integration test")
+	}
+
 	// Search for a pod that definitely doesn't exist
-	result, err := engine.FindResources(context.Background(), "pods", "default", "test-pod", "a.snapshot")
+	result, err := engine.FindResources(context.Background(), "pods", "default", "test-pod", snapshotPath)
 	require.NoError(t, err)
 
 	// Result should not be nil and should have proper structure
@@ -235,13 +207,10 @@ func TestFindResourcesWithNoResults(t *testing.T) {
 	if result.Columns != nil {
 		require.Empty(t, result.Columns)
 	}
-
 }
 
 func TestFindResourcesQueryConstruction(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	engine, err := NewEngine(tmpDir)
+	engine, err := NewEngine()
 	require.NoError(t, err)
 
 	// Test different parameter combinations
@@ -275,19 +244,25 @@ func TestFindResourcesQueryConstruction(t *testing.T) {
 		t.Run(fmt.Sprintf("%s-%s-%s", tc.resourceType, tc.namespace, tc.name), func(t *testing.T) {
 			// We can't easily test the query construction without executing it
 			// but we can test that it doesn't panic
-			_, err := engine.FindResources(context.Background(), tc.resourceType, tc.namespace, tc.name, "nonexistent.snapshot")
+			_, err := engine.FindResources(context.Background(), tc.resourceType, tc.namespace, tc.name, "/nonexistent/path.snapshot")
 			// We expect an error because the snapshot doesn't exist
 			require.Error(t, err)
+			require.Contains(t, err.Error(), "does not exist")
 		})
 	}
 }
 
 func TestGetNamespaceAnalysisStructure(t *testing.T) {
-	// Use home snapshots directory with real snapshot files
-	engine, err := NewEngine(os.ExpandEnv("$HOME/snapshots"))
+	engine, err := NewEngine()
 	require.NoError(t, err)
 
-	result, err := engine.GetNamespaceAnalysis(context.Background(), "a.snapshot", "5")
+	// Create a test snapshot path
+	snapshotPath := filepath.Join(os.ExpandEnv("$HOME/snapshots"), "a.snapshot")
+	if _, err := os.Stat(snapshotPath); os.IsNotExist(err) {
+		t.Skip("Test snapshot not found, skipping integration test")
+	}
+
+	result, err := engine.GetNamespaceAnalysis(context.Background(), snapshotPath, "5")
 	require.NoError(t, err)
 
 	// Check structure
@@ -298,15 +273,24 @@ func TestGetNamespaceAnalysisStructure(t *testing.T) {
 }
 
 func TestCompareSnapshotsWithDifferentTypes(t *testing.T) {
-	// Use home snapshots directory with real snapshot files
-	engine, err := NewEngine(os.ExpandEnv("$HOME/snapshots"))
+	engine, err := NewEngine()
 	require.NoError(t, err)
+
+	// Create test snapshot paths
+	snapshotPath1 := filepath.Join(os.ExpandEnv("$HOME/snapshots"), "a.snapshot")
+	snapshotPath2 := filepath.Join(os.ExpandEnv("$HOME/snapshots"), "b.snapshot")
+	if _, err := os.Stat(snapshotPath1); os.IsNotExist(err) {
+		t.Skip("Test snapshot not found, skipping integration test")
+	}
+	if _, err := os.Stat(snapshotPath2); os.IsNotExist(err) {
+		t.Skip("Test snapshot not found, skipping integration test")
+	}
 
 	diffTypes := []string{"added", "removed", "added_revisions", "removed_revisions"}
 
 	for _, diffType := range diffTypes {
 		t.Run(diffType, func(t *testing.T) {
-			result, err := engine.CompareSnapshots(context.Background(), "a.snapshot", "b.snapshot", diffType)
+			result, err := engine.CompareSnapshots(context.Background(), snapshotPath1, snapshotPath2, diffType)
 			require.NoError(t, err)
 
 			// Check structure
@@ -318,11 +302,20 @@ func TestCompareSnapshotsWithDifferentTypes(t *testing.T) {
 }
 
 func TestCompareSnapshotsWithInvalidDiffType(t *testing.T) {
-	// Use home snapshots directory with real snapshot files
-	engine, err := NewEngine(os.ExpandEnv("$HOME/snapshots"))
+	engine, err := NewEngine()
 	require.NoError(t, err)
 
-	result, err := engine.CompareSnapshots(context.Background(), "a.snapshot", "b.snapshot", "invalid_diff_type")
+	// Create test snapshot paths
+	snapshotPath1 := filepath.Join(os.ExpandEnv("$HOME/snapshots"), "a.snapshot")
+	snapshotPath2 := filepath.Join(os.ExpandEnv("$HOME/snapshots"), "b.snapshot")
+	if _, err := os.Stat(snapshotPath1); os.IsNotExist(err) {
+		t.Skip("Test snapshot not found, skipping integration test")
+	}
+	if _, err := os.Stat(snapshotPath2); os.IsNotExist(err) {
+		t.Skip("Test snapshot not found, skipping integration test")
+	}
+
+	result, err := engine.CompareSnapshots(context.Background(), snapshotPath1, snapshotPath2, "invalid_diff_type")
 	require.NoError(t, err)
 	require.Equal(t, "comparison", result.Type)
 	require.Contains(t, result.Summary, "Unknown diff type")
@@ -330,11 +323,10 @@ func TestCompareSnapshotsWithInvalidDiffType(t *testing.T) {
 }
 
 func TestCompareSnapshotsWithInvalidSnapshot(t *testing.T) {
-	// Use home snapshots directory but with non-existent snapshot files
-	engine, err := NewEngine(os.ExpandEnv("$HOME/snapshots"))
+	engine, err := NewEngine()
 	require.NoError(t, err)
 
-	_, err = engine.CompareSnapshots(context.Background(), "nonexistent1.snapshot", "nonexistent2.snapshot", "added")
+	_, err = engine.CompareSnapshots(context.Background(), "/nonexistent/path1.snapshot", "/nonexistent/path2.snapshot", "added")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to resolve snapshot")
 }

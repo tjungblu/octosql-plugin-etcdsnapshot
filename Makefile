@@ -39,7 +39,7 @@ build-all: build build-mcp
 install: build-all
 	mkdir -p ${OCTOSQLPATH}
 	cp ${BINARY} ${OCTOSQLPATH}
-	cp ${MCP_BINARY} ${OCTOSQLPATH}
+	sudo cp ${MCP_BINARY} ${BIN_PATH}
 
 .PHONY: test
 test:
