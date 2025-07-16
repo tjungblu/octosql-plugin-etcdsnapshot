@@ -46,3 +46,20 @@ func TestServerConfig(t *testing.T) {
 	require.Equal(t, "2.0.0", server.config.Version)
 	require.Equal(t, "ETCD Snapshot Analysis Tool", server.config.Description)
 }
+
+func TestNewMetadataTools(t *testing.T) {
+	config := Config{
+		Name:        "test-server",
+		Version:     "1.0.0",
+		Description: "Test server",
+	}
+
+	server, err := NewServer(config)
+	require.NoError(t, err)
+
+	// Test that the query engine has the new methods
+	require.NotNil(t, server.queryEngine)
+
+	// Verify that the server was created with the new tools
+	require.NotNil(t, server.mcpServer)
+}

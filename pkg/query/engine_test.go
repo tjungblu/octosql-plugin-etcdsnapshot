@@ -330,3 +330,252 @@ func TestCompareSnapshotsWithInvalidSnapshot(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to resolve snapshot")
 }
+
+func TestGetSnapshotMetadataStructure(t *testing.T) {
+	engine, err := NewEngine()
+	require.NoError(t, err)
+
+	// Create a test snapshot path
+	snapshotPath := filepath.Join(os.ExpandEnv("$HOME/snapshots"), "a.snapshot")
+	if _, err := os.Stat(snapshotPath); os.IsNotExist(err) {
+		t.Skip("Test snapshot not found, skipping integration test")
+	}
+
+	result, err := engine.GetSnapshotMetadata(context.Background(), snapshotPath)
+	require.NoError(t, err)
+
+	// Check structure
+	require.Equal(t, "metadata", result.Type)
+	require.Equal(t, "Snapshot metadata retrieved with storage and performance insights", result.Summary)
+	require.Contains(t, result.Details, "metadata")
+	require.NotNil(t, result.Insights)
+
+	// Check that metadata contains expected fields
+	if metadata, ok := result.Details["metadata"].(map[string]interface{}); ok {
+		// Check for key storage fields
+		require.Contains(t, metadata, "size")
+		require.Contains(t, metadata, "sizeInUse")
+		require.Contains(t, metadata, "sizeFree")
+		require.Contains(t, metadata, "totalKeys")
+		require.Contains(t, metadata, "totalRevisions")
+		require.Contains(t, metadata, "uniqueKeys")
+		require.Contains(t, metadata, "fragmentationRatio")
+		require.Contains(t, metadata, "quotaUsagePercent")
+		require.Contains(t, metadata, "averageValueSize")
+		require.Contains(t, metadata, "largestValueSize")
+		require.Contains(t, metadata, "smallestValueSize")
+		require.Contains(t, metadata, "keysWithMultipleRevisions")
+		require.Contains(t, metadata, "avgRevisionsPerKey")
+	}
+}
+
+func TestGetSnapshotMetadataWithInvalidSnapshot(t *testing.T) {
+	engine, err := NewEngine()
+	require.NoError(t, err)
+
+	_, err = engine.GetSnapshotMetadata(context.Background(), "/nonexistent/path.snapshot")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "does not exist")
+}
+
+func TestGetSnapshotMetadataInsights(t *testing.T) {
+	engine, err := NewEngine()
+	require.NoError(t, err)
+
+	// Create a test snapshot path
+	snapshotPath := filepath.Join(os.ExpandEnv("$HOME/snapshots"), "a.snapshot")
+	if _, err := os.Stat(snapshotPath); os.IsNotExist(err) {
+		t.Skip("Test snapshot not found, skipping integration test")
+	}
+
+	result, err := engine.GetSnapshotMetadata(context.Background(), snapshotPath)
+	require.NoError(t, err)
+
+	// Check that insights are generated based on metadata
+	require.NotNil(t, result.Insights)
+
+	// Check that storage summary is generated
+	if storageSummary, ok := result.Details["storage_summary"].(map[string]interface{}); ok {
+		require.Contains(t, storageSummary, "total_size_mb")
+		require.Contains(t, storageSummary, "used_size_mb")
+		require.Contains(t, storageSummary, "free_size_mb")
+		require.Contains(t, storageSummary, "usage_percentage")
+
+		// Verify that the values are reasonable
+		if totalSizeMB, ok := storageSummary["total_size_mb"].(float64); ok {
+			require.Greater(t, totalSizeMB, 0.0)
+		}
+
+		if usagePercent, ok := storageSummary["usage_percentage"].(float64); ok {
+			require.GreaterOrEqual(t, usagePercent, 0.0)
+			require.LessOrEqual(t, usagePercent, 100.0)
+		}
+	}
+}
+
+func TestAnalyzeStorageHealthStructure(t *testing.T) {
+	engine, err := NewEngine()
+	require.NoError(t, err)
+
+	// Create a test snapshot path
+	snapshotPath := filepath.Join(os.ExpandEnv("$HOME/snapshots"), "a.snapshot")
+	if _, err := os.Stat(snapshotPath); os.IsNotExist(err) {
+		t.Skip("Test snapshot not found, skipping integration test")
+	}
+
+	result, err := engine.AnalyzeStorageHealth(context.Background(), snapshotPath)
+	require.NoError(t, err)
+
+	// Check structure
+	require.Equal(t, "storage_health", result.Type)
+	require.Equal(t, "Storage health analysis completed", result.Summary)
+	require.NotNil(t, result.Details)
+	require.NotNil(t, result.Insights)
+
+	// Check that all expected health categories are present
+	require.Contains(t, result.Details, "raw_metadata")
+	require.Contains(t, result.Details, "storage_health")
+	require.Contains(t, result.Details, "quota_health")
+	require.Contains(t, result.Details, "revision_health")
+	require.Contains(t, result.Details, "value_size_health")
+	require.Contains(t, result.Details, "recommendations")
+
+	// Check storage health details
+	if storageHealth, ok := result.Details["storage_health"].(map[string]interface{}); ok {
+		require.Contains(t, storageHealth, "storage_efficiency_percent")
+		require.Contains(t, storageHealth, "wasted_space_mb")
+		require.Contains(t, storageHealth, "fragmentation_ratio")
+		require.Contains(t, storageHealth, "fragmentation_mb")
+	}
+
+	// Check quota health details
+	if quotaHealth, ok := result.Details["quota_health"].(map[string]interface{}); ok {
+		require.Contains(t, quotaHealth, "usage_percent")
+		require.Contains(t, quotaHealth, "remaining_mb")
+	}
+
+	// Check revision health details
+	if revisionHealth, ok := result.Details["revision_health"].(map[string]interface{}); ok {
+		require.Contains(t, revisionHealth, "total_keys")
+		require.Contains(t, revisionHealth, "total_revisions")
+		require.Contains(t, revisionHealth, "avg_revisions_per_key")
+		require.Contains(t, revisionHealth, "keys_with_multiple_revisions_percent")
+	}
+
+	// Check value size health details
+	if valueSizeHealth, ok := result.Details["value_size_health"].(map[string]interface{}); ok {
+		require.Contains(t, valueSizeHealth, "average_value_size_bytes")
+		require.Contains(t, valueSizeHealth, "largest_value_size_mb")
+	}
+
+	// Check recommendations are present
+	if recommendations, ok := result.Details["recommendations"].([]string); ok {
+		require.NotNil(t, recommendations)
+		// Recommendations can be empty, that's OK
+	}
+}
+
+func TestAnalyzeStorageHealthWithInvalidSnapshot(t *testing.T) {
+	engine, err := NewEngine()
+	require.NoError(t, err)
+
+	_, err = engine.AnalyzeStorageHealth(context.Background(), "/nonexistent/path.snapshot")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to get metadata")
+}
+
+func TestAnalyzeStorageHealthInsightsGeneration(t *testing.T) {
+	engine, err := NewEngine()
+	require.NoError(t, err)
+
+	// Create a test snapshot path
+	snapshotPath := filepath.Join(os.ExpandEnv("$HOME/snapshots"), "a.snapshot")
+	if _, err := os.Stat(snapshotPath); os.IsNotExist(err) {
+		t.Skip("Test snapshot not found, skipping integration test")
+	}
+
+	result, err := engine.AnalyzeStorageHealth(context.Background(), snapshotPath)
+	require.NoError(t, err)
+
+	// Check that insights are generated
+	require.NotNil(t, result.Insights)
+
+	// Check that recommendations are properly structured
+	if recommendations, ok := result.Details["recommendations"].([]string); ok {
+		require.NotNil(t, recommendations)
+		// Each recommendation should be a non-empty string
+		for _, rec := range recommendations {
+			require.NotEmpty(t, rec)
+		}
+	}
+
+	// Verify that the raw metadata is accessible
+	if rawMetadata, ok := result.Details["raw_metadata"].(map[string]interface{}); ok {
+		require.NotNil(t, rawMetadata)
+		// Should contain the basic metadata fields
+		require.Contains(t, rawMetadata, "size")
+		require.Contains(t, rawMetadata, "sizeInUse")
+		require.Contains(t, rawMetadata, "totalKeys")
+	}
+}
+
+func TestAnalyzeStorageHealthMetricsCalculation(t *testing.T) {
+	engine, err := NewEngine()
+	require.NoError(t, err)
+
+	// Create a test snapshot path
+	snapshotPath := filepath.Join(os.ExpandEnv("$HOME/snapshots"), "a.snapshot")
+	if _, err := os.Stat(snapshotPath); os.IsNotExist(err) {
+		t.Skip("Test snapshot not found, skipping integration test")
+	}
+
+	result, err := engine.AnalyzeStorageHealth(context.Background(), snapshotPath)
+	require.NoError(t, err)
+
+	// Test that calculated metrics are reasonable
+	if storageHealth, ok := result.Details["storage_health"].(map[string]interface{}); ok {
+		if efficiency, ok := storageHealth["storage_efficiency_percent"].(float64); ok {
+			require.GreaterOrEqual(t, efficiency, 0.0)
+			require.LessOrEqual(t, efficiency, 100.0)
+		}
+
+		if fragRatio, ok := storageHealth["fragmentation_ratio"].(float64); ok {
+			require.GreaterOrEqual(t, fragRatio, 0.0)
+			require.LessOrEqual(t, fragRatio, 1.0)
+		}
+
+		if wastedSpaceMB, ok := storageHealth["wasted_space_mb"].(float64); ok {
+			require.GreaterOrEqual(t, wastedSpaceMB, 0.0)
+		}
+	}
+
+	if quotaHealth, ok := result.Details["quota_health"].(map[string]interface{}); ok {
+		if usagePercent, ok := quotaHealth["usage_percent"].(float64); ok {
+			require.GreaterOrEqual(t, usagePercent, 0.0)
+			require.LessOrEqual(t, usagePercent, 100.0)
+		}
+
+		if remainingMB, ok := quotaHealth["remaining_mb"].(float64); ok {
+			require.GreaterOrEqual(t, remainingMB, 0.0)
+		}
+	}
+
+	if revisionHealth, ok := result.Details["revision_health"].(map[string]interface{}); ok {
+		if totalKeys, ok := revisionHealth["total_keys"].(float64); ok {
+			require.Greater(t, totalKeys, 0.0)
+		}
+
+		if totalRevisions, ok := revisionHealth["total_revisions"].(float64); ok {
+			require.Greater(t, totalRevisions, 0.0)
+		}
+
+		if avgRevPerKey, ok := revisionHealth["avg_revisions_per_key"].(float64); ok {
+			require.GreaterOrEqual(t, avgRevPerKey, 1.0) // Should be at least 1
+		}
+
+		if multiRevPercent, ok := revisionHealth["keys_with_multiple_revisions_percent"].(float64); ok {
+			require.GreaterOrEqual(t, multiRevPercent, 0.0)
+			require.LessOrEqual(t, multiRevPercent, 100.0)
+		}
+	}
+}

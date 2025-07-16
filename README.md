@@ -106,7 +106,7 @@ $ octosql "SELECT * FROM etcd.snapshot?meta=true" --describe
 * `size` is the total size of the entire database file in bytes
 * `sizeInUse` is the number of bytes actually used in the database
 * `sizeFree` is the free space in the database (size - sizeInUse)
-* `fragmentationRatio` is the percentage of fragmented space (sizeFree/size * 100)
+* `fragmentationRatio` is the ratio of fragmented space (sizeFree/size, between 0.0-1.0)
 * `fragmentationBytes` is the total fragmented space in bytes (same as sizeFree)
 * `totalKeys` is the total number of key-value pairs in the database
 * `totalRevisions` is the total number of unique revision numbers

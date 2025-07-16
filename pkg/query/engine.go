@@ -451,6 +451,220 @@ func (e *Engine) GetNamespaceAnalysis(ctx context.Context, snapshot string, limi
 	}, nil
 }
 
+// GetSnapshotMetadata retrieves comprehensive metadata about an etcd snapshot
+func (e *Engine) GetSnapshotMetadata(ctx context.Context, snapshot string) (*AnalysisResult, error) {
+	// Query the metadata schema - need to add the meta option to access metadata
+	query := "SELECT * FROM {{SNAPSHOT}}?meta=true"
+
+	result, err := e.ExecuteQuery(ctx, query, snapshot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute metadata query: %w", err)
+	}
+
+	details := make(map[string]interface{})
+	insights := []string{}
+
+	if len(result.Data) > 0 {
+		metadata := result.Data[0]
+		details["metadata"] = metadata
+
+		// Generate insights based on metadata
+		if size, ok := metadata["size"].(float64); ok {
+			if sizeInUse, ok := metadata["sizeInUse"].(float64); ok {
+				details["storage_summary"] = map[string]interface{}{
+					"total_size_mb":    size / (1024 * 1024),
+					"used_size_mb":     sizeInUse / (1024 * 1024),
+					"free_size_mb":     (size - sizeInUse) / (1024 * 1024),
+					"usage_percentage": (sizeInUse / size) * 100,
+				}
+
+				if size > 1024*1024*1024 { // > 1GB
+					insights = append(insights, fmt.Sprintf("Large etcd snapshot: %.2f GB total size", size/(1024*1024*1024)))
+				}
+			}
+		}
+
+		if fragRatio, ok := metadata["fragmentationRatio"].(float64); ok {
+			if fragRatio > 0.3 {
+				insights = append(insights, fmt.Sprintf("High fragmentation detected: %.1f%% - consider defragmentation", fragRatio*100))
+			}
+		}
+
+		if quotaUsage, ok := metadata["quotaUsagePercent"].(float64); ok {
+			if quotaUsage > 80 {
+				insights = append(insights, fmt.Sprintf("High quota usage: %.1f%% - monitor for approaching limits", quotaUsage))
+			}
+		}
+
+		if totalKeys, ok := metadata["totalKeys"].(float64); ok {
+			if totalRevisions, ok := metadata["totalRevisions"].(float64); ok {
+				avgRevPerKey := totalRevisions / totalKeys
+				if avgRevPerKey > 5 {
+					insights = append(insights, fmt.Sprintf("High revision density: %.1f revisions per key - investigate write patterns", avgRevPerKey))
+				}
+			}
+		}
+
+		if keysWithMultipleRevisions, ok := metadata["keysWithMultipleRevisions"].(float64); ok {
+			if uniqueKeys, ok := metadata["uniqueKeys"].(float64); ok {
+				multiRevRatio := keysWithMultipleRevisions / uniqueKeys
+				if multiRevRatio > 0.5 {
+					insights = append(insights, fmt.Sprintf("High revision churn: %.1f%% of keys have multiple revisions", multiRevRatio*100))
+				}
+			}
+		}
+	}
+
+	return &AnalysisResult{
+		Type:     "metadata",
+		Summary:  "Snapshot metadata retrieved with storage and performance insights",
+		Details:  details,
+		Insights: insights,
+	}, nil
+}
+
+// AnalyzeStorageHealth performs comprehensive storage health analysis using metadata
+func (e *Engine) AnalyzeStorageHealth(ctx context.Context, snapshot string) (*AnalysisResult, error) {
+	// Get metadata first
+	metadataResult, err := e.GetSnapshotMetadata(ctx, snapshot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get metadata for health analysis: %w", err)
+	}
+
+	details := make(map[string]interface{})
+	insights := []string{}
+	recommendations := []string{}
+
+	// Extract metadata for analysis
+	if metadataDetails, ok := metadataResult.Details["metadata"].(map[string]interface{}); ok {
+		details["raw_metadata"] = metadataDetails
+
+		// Storage efficiency analysis
+		storageHealth := make(map[string]interface{})
+		if size, ok := metadataDetails["size"].(float64); ok {
+			if sizeInUse, ok := metadataDetails["sizeInUse"].(float64); ok {
+				efficiency := (sizeInUse / size) * 100
+				storageHealth["storage_efficiency_percent"] = efficiency
+				storageHealth["wasted_space_mb"] = (size - sizeInUse) / (1024 * 1024)
+
+				if efficiency < 70 {
+					insights = append(insights, fmt.Sprintf("Poor storage efficiency: %.1f%% - significant wasted space", efficiency))
+					recommendations = append(recommendations, "Consider running etcd defragmentation to reclaim wasted space")
+				}
+			}
+		}
+
+		// Fragmentation analysis
+		if fragRatio, ok := metadataDetails["fragmentationRatio"].(float64); ok {
+			if fragBytes, ok := metadataDetails["fragmentationBytes"].(float64); ok {
+				storageHealth["fragmentation_ratio"] = fragRatio
+				storageHealth["fragmentation_mb"] = fragBytes / (1024 * 1024)
+
+				if fragRatio > 0.2 {
+					insights = append(insights, fmt.Sprintf("Fragmentation concern: %.1f%% fragmented (%.2f MB)", fragRatio*100, fragBytes/(1024*1024)))
+					recommendations = append(recommendations, "Schedule regular defragmentation to improve performance")
+				}
+			}
+		}
+
+		// Quota health
+		quotaHealth := make(map[string]interface{})
+		if quotaUsage, ok := metadataDetails["quotaUsagePercent"].(float64); ok {
+			if quotaRemaining, ok := metadataDetails["quotaRemaining"].(float64); ok {
+				quotaHealth["usage_percent"] = quotaUsage
+				quotaHealth["remaining_mb"] = quotaRemaining / (1024 * 1024)
+
+				if quotaUsage > 85 {
+					insights = append(insights, fmt.Sprintf("Critical quota usage: %.1f%% - immediate attention required", quotaUsage))
+					recommendations = append(recommendations, "Urgent: Investigate large objects and consider quota increase")
+				} else if quotaUsage > 70 {
+					insights = append(insights, fmt.Sprintf("High quota usage: %.1f%% - monitor closely", quotaUsage))
+					recommendations = append(recommendations, "Monitor quota usage and plan for potential increase")
+				}
+			}
+		}
+
+		// Revision health
+		revisionHealth := make(map[string]interface{})
+		if totalKeys, ok := metadataDetails["totalKeys"].(float64); ok {
+			if totalRevisions, ok := metadataDetails["totalRevisions"].(float64); ok {
+				if avgRevPerKey, ok := metadataDetails["avgRevisionsPerKey"].(float64); ok {
+					revisionHealth["total_keys"] = totalKeys
+					revisionHealth["total_revisions"] = totalRevisions
+					revisionHealth["avg_revisions_per_key"] = avgRevPerKey
+
+					if avgRevPerKey > 10 {
+						insights = append(insights, fmt.Sprintf("Excessive revision buildup: %.1f avg revisions per key", avgRevPerKey))
+						recommendations = append(recommendations, "Consider more aggressive compaction policy to reduce revision history")
+					}
+				}
+			}
+		}
+
+		if keysWithMultipleRevisions, ok := metadataDetails["keysWithMultipleRevisions"].(float64); ok {
+			if uniqueKeys, ok := metadataDetails["uniqueKeys"].(float64); ok {
+				multiRevRatio := (keysWithMultipleRevisions / uniqueKeys) * 100
+				revisionHealth["keys_with_multiple_revisions_percent"] = multiRevRatio
+
+				if multiRevRatio > 60 {
+					insights = append(insights, fmt.Sprintf("High revision churn: %.1f%% of keys have multiple revisions", multiRevRatio))
+					recommendations = append(recommendations, "Investigate write patterns causing high revision churn")
+				}
+			}
+		}
+
+		// Value size analysis
+		valueSizeHealth := make(map[string]interface{})
+		if avgValueSize, ok := metadataDetails["averageValueSize"].(float64); ok {
+			if largestValueSize, ok := metadataDetails["largestValueSize"].(float64); ok {
+				valueSizeHealth["average_value_size_bytes"] = avgValueSize
+				valueSizeHealth["largest_value_size_mb"] = largestValueSize / (1024 * 1024)
+
+				if largestValueSize > 10*1024*1024 { // > 10MB
+					insights = append(insights, fmt.Sprintf("Large value detected: %.2f MB - investigate potential data bloat", largestValueSize/(1024*1024)))
+					recommendations = append(recommendations, "Investigate large values and consider data optimization")
+				}
+			}
+		}
+
+		// Lease health
+		if keysWithLeases, ok := metadataDetails["keysWithLeases"].(float64); ok {
+			if activeLeases, ok := metadataDetails["activeLeases"].(float64); ok {
+				leaseHealth := map[string]interface{}{
+					"keys_with_leases": keysWithLeases,
+					"active_leases":    activeLeases,
+				}
+				details["lease_health"] = leaseHealth
+
+				if activeLeases > 1000 {
+					insights = append(insights, fmt.Sprintf("High lease count: %.0f active leases - monitor for lease accumulation", activeLeases))
+				}
+			}
+		}
+
+		// Compaction savings estimate
+		if compactionSavings, ok := metadataDetails["estimatedCompactionSavings"].(float64); ok {
+			if compactionSavings > 100*1024*1024 { // > 100MB
+				insights = append(insights, fmt.Sprintf("Significant compaction potential: %.2f MB could be saved", compactionSavings/(1024*1024)))
+				recommendations = append(recommendations, "Run compaction to reclaim space and improve performance")
+			}
+		}
+
+		details["storage_health"] = storageHealth
+		details["quota_health"] = quotaHealth
+		details["revision_health"] = revisionHealth
+		details["value_size_health"] = valueSizeHealth
+	}
+
+	details["recommendations"] = recommendations
+	return &AnalysisResult{
+		Type:     "storage_health",
+		Summary:  "Storage health analysis completed",
+		Details:  details,
+		Insights: insights,
+	}, nil
+}
+
 // resolveSnapshot resolves the snapshot path
 func (e *Engine) resolveSnapshot(snapshot string) (string, error) {
 	if snapshot == "" {

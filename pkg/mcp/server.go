@@ -143,6 +143,28 @@ func (s *Server) registerTools() {
 	)
 
 	s.mcpServer.AddTool(namespaceTool, s.handleNamespaceAnalysis)
+
+	// Register get_snapshot_metadata tool
+	metadataTool := mcp.NewTool("get_snapshot_metadata",
+		mcp.WithDescription("Get comprehensive metadata about an etcd snapshot including storage statistics, fragmentation metrics, compaction info, quota usage, and key distribution. This provides deep insights into the snapshot's storage characteristics and health."),
+		mcp.WithString("snapshot",
+			mcp.Required(),
+			mcp.Description("Absolute path to the snapshot file to analyze (e.g., '/path/to/snapshot.db'). Relative paths are not supported."),
+		),
+	)
+
+	s.mcpServer.AddTool(metadataTool, s.handleGetSnapshotMetadata)
+
+	// Register analyze_storage_health tool
+	healthTool := mcp.NewTool("analyze_storage_health",
+		mcp.WithDescription("Analyze storage health using snapshot metadata including fragmentation analysis, quota usage assessment, compaction efficiency, and recommendations for optimization."),
+		mcp.WithString("snapshot",
+			mcp.Required(),
+			mcp.Description("Absolute path to the snapshot file to analyze (e.g., '/path/to/snapshot.db'). Relative paths are not supported."),
+		),
+	)
+
+	s.mcpServer.AddTool(healthTool, s.handleAnalyzeStorageHealth)
 }
 
 func (s *Server) handleQueryEtcd(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -250,4 +272,32 @@ func (s *Server) handleNamespaceAnalysis(ctx context.Context, request mcp.CallTo
 	}
 
 	return mcp.NewToolResultText(fmt.Sprintf("Namespace analysis completed successfully:\n%+v", result)), nil
+}
+
+func (s *Server) handleGetSnapshotMetadata(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	snapshot, err := request.RequireString("snapshot")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	result, err := s.queryEngine.GetSnapshotMetadata(ctx, snapshot)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Snapshot metadata retrieval failed: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(fmt.Sprintf("Snapshot metadata retrieved successfully:\n%+v", result)), nil
+}
+
+func (s *Server) handleAnalyzeStorageHealth(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	snapshot, err := request.RequireString("snapshot")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	result, err := s.queryEngine.AnalyzeStorageHealth(ctx, snapshot)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Storage health analysis failed: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(fmt.Sprintf("Storage health analysis completed successfully:\n%+v", result)), nil
 }

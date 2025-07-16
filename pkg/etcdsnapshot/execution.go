@@ -81,7 +81,7 @@ func produceMetaFromBackend(ctx ExecutionContext, produce ProduceFn, etcdBackend
 	stats := calculateEtcdStats(etcdBackend)
 
 	// Calculate derived metrics
-	fragmentationRatio := float64(sizeFree) / float64(size) * 100
+	fragmentationRatio := float64(sizeFree) / float64(size)
 	defaultQuota := int64(8 * 1024 * 1024 * 1024) // 8GB default
 	quotaUsageRatio := float64(size) / float64(defaultQuota)
 	quotaUsagePercent := quotaUsageRatio * 100

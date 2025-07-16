@@ -10,6 +10,8 @@ The MCP server exposes powerful cluster analysis capabilities through a set of t
 - Perform high-level cluster analysis
 - Find specific Kubernetes resources
 - Compare snapshots to detect changes
+- Analyze comprehensive storage health and performance metrics
+- Get detailed metadata about etcd snapshots including fragmentation, quota usage, and compaction efficiency
 
 ## Available Tools
 
@@ -32,7 +34,10 @@ Execute custom SQL queries against etcd snapshots.
 Perform high-level cluster analysis.
 
 **Parameters:**
-- `analysis_type` (required): Type of analysis (`overview`, `resources`, `performance`)
+- `analysis_type` (required): Type of analysis:
+  - `overview`: General cluster health and resource counts with metadata insights
+  - `resources`: Resource distribution by namespace and type with storage metrics
+  - `performance`: Revision patterns, storage impact, and performance hotspots
 - `snapshot` (required): Absolute path to the snapshot file to analyze
 
 **Example:**
@@ -93,6 +98,49 @@ Analyze namespace usage patterns including storage consumption and object counts
   "limit": "5"
 }
 ```
+
+### 6. `get_snapshot_metadata`
+Get comprehensive metadata about an etcd snapshot including storage statistics, fragmentation metrics, compaction info, quota usage, and key distribution.
+
+**Parameters:**
+- `snapshot` (required): Absolute path to the snapshot file to analyze
+
+**Example:**
+```json
+{
+  "snapshot": "/home/user/snapshots/cluster.snapshot"
+}
+```
+
+**Returns:**
+- Storage summary (total size, used size, free space, usage percentage)
+- Fragmentation analysis (fragmentation ratio, bytes)
+- Quota information (usage percentage, remaining space)
+- Key distribution (total keys, revisions, unique keys)
+- Value size statistics (average, largest, smallest)
+- Compaction metrics (keys with multiple revisions, estimated savings)
+
+### 7. `analyze_storage_health`
+Perform comprehensive storage health analysis using snapshot metadata including fragmentation analysis, quota usage assessment, compaction efficiency, and optimization recommendations.
+
+**Parameters:**
+- `snapshot` (required): Absolute path to the snapshot file to analyze
+
+**Example:**
+```json
+{
+  "snapshot": "/home/user/snapshots/cluster.snapshot"
+}
+```
+
+**Returns:**
+- Storage efficiency analysis
+- Fragmentation assessment
+- Quota health status
+- Revision pattern analysis
+- Value size distribution
+- Lease usage patterns
+- Actionable recommendations for optimization
 
 ## Installation & Setup
 
