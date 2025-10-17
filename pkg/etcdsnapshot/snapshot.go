@@ -89,6 +89,14 @@ func (d Database) GetTable(ctx context.Context, name string, options map[string]
 				Type: octosql.Int,
 			},
 			{
+				Name: "maxModRevision",
+				Type: octosql.Int,
+			},
+			{
+				Name: "minModRevision",
+				Type: octosql.Int,
+			},
+			{
 				Name: "revisionRange",
 				Type: octosql.Int,
 			},

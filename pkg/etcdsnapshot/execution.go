@@ -102,6 +102,8 @@ func produceMetaFromBackend(ctx ExecutionContext, produce ProduceFn, etcdBackend
 		octosql.NewInt(stats.totalRevisions),
 		octosql.NewInt(stats.maxRevision),
 		octosql.NewInt(stats.minRevision),
+		octosql.NewInt(stats.maxModRevision),
+		octosql.NewInt(stats.minModRevision),
 		octosql.NewInt(stats.maxRevision - stats.minRevision),
 		octosql.NewFloat(stats.avgRevisionsPerKey),
 
@@ -228,10 +230,10 @@ func mapEtcdToOctosql(kv mvccpb.KeyValue) []octosql.Value {
 		}
 	}
 
-	values = append(values, octosql.NewFloat(float64(kv.CreateRevision)))
-	values = append(values, octosql.NewFloat(float64(kv.ModRevision)))
-	values = append(values, octosql.NewFloat(float64(kv.Version)))
-	values = append(values, octosql.NewFloat(float64(kv.Lease)))
+	values = append(values, octosql.NewInt(int(kv.CreateRevision)))
+	values = append(values, octosql.NewInt(int(kv.ModRevision)))
+	values = append(values, octosql.NewInt(int(kv.Version)))
+	values = append(values, octosql.NewInt(int(kv.Lease)))
 
 	value := ""
 	if utf8.Valid(kv.Value) {
@@ -260,6 +262,8 @@ type EtcdStats struct {
 	totalRevisions             int
 	maxRevision                int
 	minRevision                int
+	maxModRevision             int
+	minModRevision             int
 	avgRevisionsPerKey         float64
 	totalValueSize             int
 	averageValueSize           int
@@ -274,8 +278,9 @@ type EtcdStats struct {
 
 func calculateEtcdStats(etcdBackend backend.Backend) EtcdStats {
 	stats := EtcdStats{
-		minRevision:       math.MaxInt32,
-		smallestValueSize: math.MaxInt32,
+		minRevision:       math.MaxInt,
+		minModRevision:    math.MaxInt,
+		smallestValueSize: math.MaxInt,
 	}
 
 	totalValueSize := 0
@@ -299,11 +304,18 @@ func calculateEtcdStats(etcdBackend backend.Backend) EtcdStats {
 		uniqueRevisions[kv.ModRevision] = true
 
 		// Track revision ranges
-		if int(kv.ModRevision) > stats.maxRevision {
-			stats.maxRevision = int(kv.ModRevision)
+		if int(kv.CreateRevision) > stats.maxRevision {
+			stats.maxRevision = int(kv.CreateRevision)
 		}
 		if int(kv.CreateRevision) < stats.minRevision {
-			stats.minRevision = int(kv.ModRevision)
+			stats.minRevision = int(kv.CreateRevision)
+		}
+
+		if int(kv.ModRevision) > stats.maxModRevision {
+			stats.maxModRevision = int(kv.ModRevision)
+		}
+		if int(kv.ModRevision) < stats.minModRevision {
+			stats.minModRevision = int(kv.ModRevision)
 		}
 
 		// Track value sizes

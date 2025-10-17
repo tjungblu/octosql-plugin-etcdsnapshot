@@ -88,6 +88,8 @@ $ octosql "SELECT * FROM etcd.snapshot?meta=true" --describe
 | 'largestValueSize'           | 'Int'   | false      |
 | 'maxRevision'                | 'Int'   | false      |
 | 'minRevision'                | 'Int'   | false      |
+| 'maxModRevision'             | 'Int'   | false      |
+| 'minModRevision'             | 'Int'   | false      |
 | 'quotaRemaining'             | 'Int'   | false      |
 | 'quotaUsagePercent'          | 'Float' | false      |
 | 'quotaUsageRatio'            | 'Float' | false      |
@@ -110,9 +112,11 @@ $ octosql "SELECT * FROM etcd.snapshot?meta=true" --describe
 * `fragmentationBytes` is the total fragmented space in bytes (same as sizeFree)
 * `totalKeys` is the total number of key-value pairs in the database
 * `totalRevisions` is the total number of unique revision numbers
-* `maxRevision` is the highest revision number in the database
-* `minRevision` is the lowest revision number in the database
-* `revisionRange` is the difference between max and min revision numbers
+* `maxRevision` is the highest creation revision number in the database
+* `minRevision` is the lowest creation revision number in the database
+* `maxModRevision` is the highest mod revision number in the database
+* `minModRevision` is the lowest mod revision number in the database
+* `revisionRange` is the difference between max and min creation revision numbers
 * `avgRevisionsPerKey` is the average number of revisions per unique key
 * `defaultQuota` is the default etcd storage quota (8GB)
 * `quotaUsageRatio` is the ratio of current size to quota (0.0-1.0)
@@ -295,7 +299,45 @@ $ octosql "SELECT d.key, SUM(valueSize) AS SZ FROM etcd.snapshot d GROUP BY d.ke
 | '/kubernetes.io/apiextensions.k8s.io/customresourcedefinitions/storageclusters.xxx.openshift.io' |    3637390 |
 | '/kubernetes.io/apiserver.openshift.io/apirequestcounts/configmaps.v1'                           |    1405726 |
 +--------------------------------------------------------------------------------------------------+------------+
+```
 
+### Get the first ten created keys
+
+```sql
+$ octosql "SELECT r.key, createRevision, modRevision FROM etcd.snapshot r where createRevision < 10 ORDER BY createRevision"
++-------------------------------------------------------------------------------------+----------------+-------------+
+|                                         key                                         | createRevision | modRevision |
++-------------------------------------------------------------------------------------+----------------+-------------+
+| '/kubernetes.io/ranges/serviceips'                                                  |              2 |       27652 |
+| '/kubernetes.io/ranges/servicenodeports'                                            |              3 |        8361 |
+| '/kubernetes.io/servicecidrs/kubernetes'                                            |              4 |     5881943 |
+| '/kubernetes.io/servicecidrs/kubernetes'                                            |              4 |     6050534 |
+| '/kubernetes.io/prioritylevelconfigurations/system'                                 |              5 |           5 |
+| '/kubernetes.io/apiregistration.k8s.io/apiservices/v1.authentication.k8s.io'        |              6 |           6 |
+| '/kubernetes.io/apiregistration.k8s.io/apiservices/v1.apps'                         |              7 |           7 |
+| '/kubernetes.io/apiregistration.k8s.io/apiservices/v1.admissionregistration.k8s.io' |              8 |           8 |
+| '/kubernetes.io/apiregistration.k8s.io/apiservices/v1.'                             |              9 |           9 |
++-------------------------------------------------------------------------------------+----------------+-------------+
+```
+
+### Get the last ten created keys
+
+```sql
+$ octosql "SELECT r.key, createRevision, modRevision FROM etcd.snapshot r ORDER BY createRevision DESC LIMIT 10"
++-----------------------------------------------------------------------+----------------+-------------+
+|                                  key                                  | createRevision | modRevision |
++-----------------------------------------------------------------------+----------------+-------------+
+| '/kubernetes.io/events/ceo-load-wtvdg-1/apiload-event-wtvdg-1-40470'  |        6093759 |     6093759 |
+| '/kubernetes.io/events/ceo-load-wtvdg-1/apiload-event-wtvdg-5-40473'  |        6093758 |     6093758 |
+| '/kubernetes.io/events/ceo-load-wtvdg-1/apiload-event-wtvdg-18-40324' |        6093757 |     6093757 |
+| '/kubernetes.io/events/ceo-load-wtvdg-1/apiload-event-wtvdg-0-40309'  |        6093756 |     6093756 |
+| '/kubernetes.io/events/ceo-load-wtvdg-1/apiload-event-wtvdg-7-40265'  |        6093755 |     6093755 |
+| '/kubernetes.io/events/ceo-load-wtvdg-1/apiload-event-wtvdg-9-40438'  |        6093754 |     6093754 |
+| '/kubernetes.io/events/ceo-load-wtvdg-1/apiload-event-wtvdg-8-40367'  |        6093753 |     6093753 |
+| '/kubernetes.io/events/ceo-load-wtvdg-1/apiload-event-wtvdg-15-40269' |        6093752 |     6093752 |
+| '/kubernetes.io/events/ceo-load-wtvdg-1/apiload-event-wtvdg-6-40430'  |        6093751 |     6093751 |
+| '/kubernetes.io/events/ceo-load-wtvdg-1/apiload-event-wtvdg-14-40326' |        6093750 |     6093750 |
++-----------------------------------------------------------------------+----------------+-------------+
 ```
 
 ## 🤖 MCP Server for AI Assistants
