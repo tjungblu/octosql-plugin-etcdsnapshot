@@ -1,6 +1,7 @@
 package etcdsnapshot
 
 import (
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -238,6 +239,8 @@ func mapEtcdToOctosql(kv mvccpb.KeyValue) []octosql.Value {
 	value := ""
 	if utf8.Valid(kv.Value) {
 		value = string(kv.Value)
+	} else {
+		value = base64.StdEncoding.EncodeToString(kv.Value)
 	}
 
 	// add the value and its size in bytes for the value, for easier sizing queries
