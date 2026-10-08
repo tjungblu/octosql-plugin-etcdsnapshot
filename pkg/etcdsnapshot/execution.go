@@ -147,8 +147,8 @@ func produceContentFromMvccStore(ctx ExecutionContext, produce ProduceFn, etcdBa
 	keys, vals := etcdBackend.ReadTx().UnsafeRange(buckets.Key, revToBytes(0, 0), revToBytes(math.MaxInt64, math.MaxInt64), math.MaxInt64)
 	fmt.Printf("found %d records in snapshot\n", len(keys))
 
-	kv := mvccpb.KeyValue{}
 	for i := 0; i < len(keys); i++ {
+		kv := mvccpb.KeyValue{}
 		err := kv.Unmarshal(vals[i])
 		if err != nil {
 			fmt.Printf("got an error while unmarshaling value: %v\n", err)
